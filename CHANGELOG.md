@@ -2,6 +2,10 @@
 
 All notable changes to `filament-action-overflow` will be documented in this file.
 
+## 1.0.3 - 2026-04-12
+
+- Fixed missing trailing newline in service provider for consistent code style.
+
 ## 1.0.1 - 2026-04-12
 
 - Primary actions and the More trigger are now promoted to Filament's button view by default (`button => true`), so `withOverflow(1)` produces matching buttons without per-action `->button()` calls. Disable with `->button(false)` or config.
