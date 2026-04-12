@@ -117,6 +117,8 @@ class ActionOverflow
 
         [$primary, $overflow] = $this->partitionPrimaryAndOverflow($availableActions);
 
+        $primary = array_map(fn (mixed $action): mixed => $this->promoteToButton($action), $primary);
+
         $overflow = $this->sanitizeOverflowDividers($overflow);
 
         $overflowActionCount = 0;
@@ -140,10 +142,23 @@ class ActionOverflow
                 }
             }
 
-            return [...$primary, $onlyAction];
+            return [...$primary, $this->promoteToButton($onlyAction)];
         }
 
         return [...$primary, $this->makeMoreGroup($overflow)];
+    }
+
+    protected function promoteToButton(mixed $action): mixed
+    {
+        if (! $this->button) {
+            return $action;
+        }
+
+        if (is_object($action) && method_exists($action, 'button')) {
+            $action->button();
+        }
+
+        return $action;
     }
 
     /**
@@ -207,11 +222,12 @@ class ActionOverflow
     }
 
     /**
-     * Walks the filtered list left to right, collecting non-divider items as
-     * primary until `primaryCount` real actions have been taken. Dividers
-     * encountered before the primary slice is full are dropped (they have no
-     * visual meaning between side-by-side primary buttons). Everything after
-     * the primary slice — actions and dividers — becomes the overflow list.
+     * Walks the filtered list left to right, collecting items as primary
+     * until `primaryCount` real actions have been taken. When a divider
+     * (ActionGroup with dropdown(false)) is encountered while still filling
+     * primary slots, its available children are extracted toward primaryCount;
+     * any remaining children form a reconstructed divider in overflow.
+     * Everything after the primary slice is full goes to overflow unchanged.
      *
      * @param  array<mixed>  $available
      * @return array{0: array<mixed>, 1: array<mixed>}
@@ -223,26 +239,44 @@ class ActionOverflow
         $primaryTaken = 0;
 
         foreach ($available as $item) {
-            if ($primaryTaken < $this->primaryCount) {
-                if ($this->isDivider($item)) {
-                    continue;
-                }
+            if ($primaryTaken >= $this->primaryCount) {
+                $overflow[] = $item;
 
+                continue;
+            }
+
+            if (! $this->isDivider($item)) {
                 $primary[] = $item;
                 $primaryTaken++;
 
                 continue;
             }
 
-            $overflow[] = $item;
+            $remaining = [];
+
+            foreach ($item->getActions() as $child) {
+                if ($primaryTaken < $this->primaryCount && $this->isActionAvailable($child)) {
+                    $primary[] = $child;
+                    $primaryTaken++;
+                } else {
+                    $remaining[] = $child;
+                }
+            }
+
+            if ($remaining !== []) {
+                $overflow[] = ActionGroup::make($remaining)->dropdown(false);
+            }
         }
 
         return [$primary, $overflow];
     }
 
     /**
-     * Drops leading + trailing dividers and collapses runs of adjacent dividers
-     * to one, so the overflow dropdown never renders an orphan separator.
+     * Cleans up divider positioning in the overflow so the dropdown menu
+     * never starts or ends with an orphan separator and adjacent dividers
+     * are collapsed to one. Leading, trailing, and collapsed dividers are
+     * unwrapped — their children are extracted directly — so no actions
+     * are silently lost.
      *
      * @param  array<mixed>  $overflow
      * @return array<mixed>
@@ -256,6 +290,10 @@ class ActionOverflow
             $isDivider = $this->isDivider($item);
 
             if ($isDivider && $previousWasDivider) {
+                foreach ($item->getActions() as $child) {
+                    $result[] = $child;
+                }
+
                 continue;
             }
 
@@ -264,7 +302,11 @@ class ActionOverflow
         }
 
         while ($result !== [] && $this->isDivider(end($result))) {
-            array_pop($result);
+            $trailing = array_pop($result);
+
+            foreach ($trailing->getActions() as $child) {
+                $result[] = $child;
+            }
         }
 
         return array_values($result);

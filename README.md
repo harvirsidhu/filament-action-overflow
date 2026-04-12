@@ -72,6 +72,8 @@ public function getHeaderActions(): array
 
 `->withOverflow()` is a terminal call — it returns the composed `array<Action | ActionGroup>`, ready to be returned from `getHeaderActions()`, `getTableActions()`, `getRecordActions()`, etc.
 
+By default the package promotes both the primary actions and the `More` dropdown trigger to Filament's button view, so a plain `withOverflow(1)` produces a row of matching buttons without the caller needing to add `->button()` to each action individually. Disable this with `->button(false)` (or set `'button' => false` in config) if the surrounding context prefers link-style actions (e.g., table row actions) — the composer will then leave each action's render view untouched.
+
 ### Fluent entry point
 
 For full control over the More button's label, icon, color, and other presentation options, use the `ActionOverflow` facade:

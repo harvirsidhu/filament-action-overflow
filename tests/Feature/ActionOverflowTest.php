@@ -253,7 +253,7 @@ it('preserves a divider between actions inside the overflow group', function ():
     expect($overflowItems[3]->getName())->toBe('download');
 });
 
-it('drops a divider that would appear between primary actions', function (): void {
+it('extracts divider children as primary actions when slots remain', function (): void {
     $edit = Action::make('edit');
     $archive = Action::make('archive');
     $divider = makeDividerGroup([Action::make('publish')]);
@@ -262,9 +262,10 @@ it('drops a divider that would appear between primary actions', function (): voi
         ->primaryCount(2)
         ->toActions();
 
-    expect($composed)->toHaveCount(2)
+    expect($composed)->toHaveCount(3)
         ->and($composed[0])->toBe($edit)
-        ->and($composed[1])->toBe($archive);
+        ->and($composed[1]->getName())->toBe('publish')
+        ->and($composed[2])->toBe($archive);
 });
 
 it('does not count a divider toward the primary action count', function (): void {
@@ -280,11 +281,18 @@ it('does not count a divider toward the primary action count', function (): void
     expect($composed)->toHaveCount(3)
         ->and($composed[0])->toBe($edit)
         ->and($composed[1])->toBe($archive)
-        ->and($composed[2])->toBe($delete)
-        ->and($composed[2])->not->toBeInstanceOf(ActionGroup::class);
+        ->and($composed[2])->toBeInstanceOf(ActionGroup::class);
+
+    /** @var ActionGroup $moreGroup */
+    $moreGroup = $composed[2];
+    $overflowItems = $moreGroup->getActions();
+
+    expect($overflowItems)->toHaveCount(2);
+    expect($overflowItems[0]->getName())->toBe('publish');
+    expect($overflowItems[1]->getName())->toBe('delete');
 });
 
-it('strips a leading divider from the overflow', function (): void {
+it('unwraps a leading divider in the overflow preserving its children', function (): void {
     $edit = Action::make('edit');
     $archive = Action::make('archive');
     $delete = Action::make('delete');
@@ -298,12 +306,13 @@ it('strips a leading divider from the overflow', function (): void {
     $moreGroup = $composed[1];
     $overflowItems = $moreGroup->getActions();
 
-    expect($overflowItems)->toHaveCount(2);
-    expect($overflowItems[0]->getName())->toBe('archive');
-    expect($overflowItems[1]->getName())->toBe('delete');
+    expect($overflowItems)->toHaveCount(3);
+    expect($overflowItems[0]->getName())->toBe('publish');
+    expect($overflowItems[1]->getName())->toBe('archive');
+    expect($overflowItems[2]->getName())->toBe('delete');
 });
 
-it('strips a trailing divider from the overflow', function (): void {
+it('unwraps a trailing divider in the overflow preserving its children', function (): void {
     $edit = Action::make('edit');
     $archive = Action::make('archive');
     $delete = Action::make('delete');
@@ -317,12 +326,13 @@ it('strips a trailing divider from the overflow', function (): void {
     $moreGroup = $composed[1];
     $overflowItems = $moreGroup->getActions();
 
-    expect($overflowItems)->toHaveCount(2);
+    expect($overflowItems)->toHaveCount(3);
     expect($overflowItems[0]->getName())->toBe('archive');
     expect($overflowItems[1]->getName())->toBe('delete');
+    expect($overflowItems[2]->getName())->toBe('publish');
 });
 
-it('collapses adjacent dividers to a single one', function (): void {
+it('collapses adjacent dividers keeping one and unwrapping the rest', function (): void {
     $edit = Action::make('edit');
     $archive = Action::make('archive');
     $delete = Action::make('delete');
@@ -337,14 +347,15 @@ it('collapses adjacent dividers to a single one', function (): void {
     $moreGroup = $composed[1];
     $overflowItems = $moreGroup->getActions();
 
-    expect($overflowItems)->toHaveCount(3);
+    expect($overflowItems)->toHaveCount(4);
     expect($overflowItems[0]->getName())->toBe('archive');
     expect($overflowItems[1])->toBeInstanceOf(ActionGroup::class);
     expect($overflowItems[1]->hasDropdown())->toBeFalse();
-    expect($overflowItems[2]->getName())->toBe('delete');
+    expect($overflowItems[2]->getName())->toBe('feature');
+    expect($overflowItems[3]->getName())->toBe('delete');
 });
 
-it('flattens a single real overflow action even when accompanied by dividers', function (): void {
+it('unwraps dividers alongside other overflow actions preserving all children', function (): void {
     $edit = Action::make('edit');
     $archive = Action::make('archive');
     $divider = makeDividerGroup([Action::make('publish')]);
@@ -355,8 +366,149 @@ it('flattens a single real overflow action even when accompanied by dividers', f
 
     expect($composed)->toHaveCount(2)
         ->and($composed[0])->toBe($edit)
-        ->and($composed[1])->toBe($archive)
-        ->and($composed[1])->not->toBeInstanceOf(ActionGroup::class);
+        ->and($composed[1])->toBeInstanceOf(ActionGroup::class);
+
+    /** @var ActionGroup $moreGroup */
+    $moreGroup = $composed[1];
+    $overflowItems = $moreGroup->getActions();
+
+    expect($overflowItems)->toHaveCount(2);
+    expect($overflowItems[0]->getName())->toBe('publish');
+    expect($overflowItems[1]->getName())->toBe('archive');
+});
+
+it('promotes link-style primary actions to button view by default', function (): void {
+    $view = Action::make('view')->link();
+    $edit = Action::make('edit')->link();
+    $archive = Action::make('archive')->link();
+    $delete = Action::make('delete')->link();
+
+    $composed = ActionOverflow::make([$view, $edit, $archive, $delete])
+        ->primaryCount(2)
+        ->toActions();
+
+    expect($composed)->toHaveCount(3);
+
+    /** @var Action $primaryOne */
+    $primaryOne = $composed[0];
+    /** @var Action $primaryTwo */
+    $primaryTwo = $composed[1];
+
+    expect($primaryOne->isButton())->toBeTrue()
+        ->and($primaryTwo->isButton())->toBeTrue()
+        ->and($composed[2])->toBeInstanceOf(ActionGroup::class);
+});
+
+it('promotes a link-style flattened single overflow action to button view', function (): void {
+    $view = Action::make('view')->link();
+    $edit = Action::make('edit')->link();
+
+    $composed = ActionOverflow::make([$view, $edit])
+        ->primaryCount(1)
+        ->toActions();
+
+    expect($composed)->toHaveCount(2);
+
+    /** @var Action $flattened */
+    $flattened = $composed[1];
+
+    expect($flattened->isButton())->toBeTrue();
+});
+
+it('leaves primary render view untouched when button flag is disabled', function (): void {
+    $view = Action::make('view')->link();
+    $edit = Action::make('edit')->link();
+    $archive = Action::make('archive')->link();
+
+    $composed = ActionOverflow::make([$view, $edit, $archive])
+        ->primaryCount(1)
+        ->button(false)
+        ->toActions();
+
+    /** @var Action $primary */
+    $primary = $composed[0];
+
+    expect($primary->isButton())->toBeFalse();
+});
+
+it('splits a divider across primary and overflow when primaryCount is reached mid-divider', function (): void {
+    $divider = makeDividerGroup([
+        Action::make('submit'),
+        Action::make('print'),
+    ]);
+    $change = Action::make('change');
+    $refresh = Action::make('refresh');
+
+    $composed = ActionOverflow::make([$divider, $change, $refresh])
+        ->primaryCount(1)
+        ->toActions();
+
+    expect($composed)->toHaveCount(2)
+        ->and($composed[0]->getName())->toBe('submit')
+        ->and($composed[1])->toBeInstanceOf(ActionGroup::class);
+
+    /** @var ActionGroup $moreGroup */
+    $moreGroup = $composed[1];
+    $overflowItems = $moreGroup->getActions();
+
+    expect($overflowItems)->toHaveCount(3);
+    expect($overflowItems[0]->getName())->toBe('print');
+    expect($overflowItems[1]->getName())->toBe('change');
+    expect($overflowItems[2]->getName())->toBe('refresh');
+});
+
+it('extracts primary actions across multiple divider groups', function (): void {
+    $divider1 = makeDividerGroup([Action::make('a1'), Action::make('a2')]);
+    $divider2 = makeDividerGroup([Action::make('b1'), Action::make('b2')]);
+    $solo = Action::make('solo');
+
+    $composed = ActionOverflow::make([$divider1, $divider2, $solo])
+        ->primaryCount(3)
+        ->toActions();
+
+    expect($composed)->toHaveCount(4)
+        ->and($composed[0]->getName())->toBe('a1')
+        ->and($composed[1]->getName())->toBe('a2')
+        ->and($composed[2]->getName())->toBe('b1')
+        ->and($composed[3])->toBeInstanceOf(ActionGroup::class);
+
+    /** @var ActionGroup $moreGroup */
+    $moreGroup = $composed[3];
+    $overflowItems = $moreGroup->getActions();
+
+    expect($overflowItems)->toHaveCount(2);
+    expect($overflowItems[0]->getName())->toBe('b2');
+    expect($overflowItems[1]->getName())->toBe('solo');
+});
+
+it('drops a divider whose children are all extracted as primary', function (): void {
+    $divider = makeDividerGroup([Action::make('only')]);
+    $other = Action::make('other');
+
+    $composed = ActionOverflow::make([$divider, $other])
+        ->primaryCount(1)
+        ->toActions();
+
+    expect($composed)->toHaveCount(2)
+        ->and($composed[0]->getName())->toBe('only')
+        ->and($composed[1])->toBe($other);
+});
+
+it('skips unavailable divider children for primary but keeps them in overflow divider', function (): void {
+    $hidden = Action::make('hidden-child')->hidden();
+    $visible = Action::make('visible-child');
+
+    $divider = makeDividerGroup([$hidden, $visible]);
+    $other1 = Action::make('other1');
+    $other2 = Action::make('other2');
+
+    $composed = ActionOverflow::make([$divider, $other1, $other2])
+        ->primaryCount(1)
+        ->toActions();
+
+    expect($composed)->toHaveCount(2)
+        ->and($composed[0]->getName())->toBe('visible-child')
+        ->and($composed[1])->toBeInstanceOf(ActionGroup::class);
 });
 
 it('exposes a withOverflow macro on ActionGroup that matches direct composition', function (): void {
