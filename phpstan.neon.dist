@@ -1,0 +1,20 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - vendor/nesbot/carbon/extension.neon
+    - phpstan-baseline.neon
+
+parameters:
+    level: 4
+    paths:
+        - src
+        - config
+    excludePaths:
+        # File-scope closure rebound to Filament's ActionGroup at runtime by
+        # Laravel's Macroable. No surrounding class scope means $this cannot
+        # be analyzed here; inclusion of this file in static analysis would
+        # require either a @phpstan-ignore comment or a baseline entry, both
+        # of which are disallowed by project policy.
+        - src/Macros/with_overflow_macro.php
+    tmpDir: build/phpstan
+    checkOctaneCompatibility: true
+    checkModelProperties: true
