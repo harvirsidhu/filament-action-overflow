@@ -1,8 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Harvirsidhu\FilamentActionOverflow;
 
-class ActionOverflowManager
+final class ActionOverflowManager
 {
     /**
      * @param  array<mixed>  $actions

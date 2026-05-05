@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Harvirsidhu\FilamentActionOverflow;
 
 use Filament\Actions\ActionGroup;
@@ -22,10 +24,6 @@ class FilamentActionOverflowServiceProvider extends PackageServiceProvider
 
         if (file_exists($package->basePath('/../config/action-overflow.php'))) {
             $package->hasConfigFile('action-overflow');
-        }
-
-        if (file_exists($package->basePath('/../resources/lang'))) {
-            $package->hasTranslations();
         }
     }
 

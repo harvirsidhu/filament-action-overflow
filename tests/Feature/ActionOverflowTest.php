@@ -312,7 +312,7 @@ it('unwraps a leading divider in the overflow preserving its children', function
     expect($overflowItems[2]->getName())->toBe('delete');
 });
 
-it('unwraps a trailing divider in the overflow preserving its children', function (): void {
+it('preserves a trailing divider in the overflow as its own section', function (): void {
     $edit = Action::make('edit');
     $archive = Action::make('archive');
     $delete = Action::make('delete');
@@ -329,10 +329,12 @@ it('unwraps a trailing divider in the overflow preserving its children', functio
     expect($overflowItems)->toHaveCount(3);
     expect($overflowItems[0]->getName())->toBe('archive');
     expect($overflowItems[1]->getName())->toBe('delete');
-    expect($overflowItems[2]->getName())->toBe('publish');
+    expect($overflowItems[2])->toBeInstanceOf(ActionGroup::class);
+    expect($overflowItems[2]->hasDropdown())->toBeFalse();
+    expect($overflowItems[2]->getActions()[0]->getName())->toBe('publish');
 });
 
-it('collapses adjacent dividers keeping one and unwrapping the rest', function (): void {
+it('preserves adjacent dividers between content as distinct sections', function (): void {
     $edit = Action::make('edit');
     $archive = Action::make('archive');
     $delete = Action::make('delete');
@@ -351,8 +353,49 @@ it('collapses adjacent dividers keeping one and unwrapping the rest', function (
     expect($overflowItems[0]->getName())->toBe('archive');
     expect($overflowItems[1])->toBeInstanceOf(ActionGroup::class);
     expect($overflowItems[1]->hasDropdown())->toBeFalse();
-    expect($overflowItems[2]->getName())->toBe('feature');
+    expect($overflowItems[1]->getActions()[0]->getName())->toBe('publish');
+    expect($overflowItems[2])->toBeInstanceOf(ActionGroup::class);
+    expect($overflowItems[2]->hasDropdown())->toBeFalse();
+    expect($overflowItems[2]->getActions()[0]->getName())->toBe('feature');
     expect($overflowItems[3]->getName())->toBe('delete');
+});
+
+it('keeps two non-empty divider sections separate when both land in overflow', function (): void {
+    $submit = Action::make('submit');
+    $print = Action::make('print');
+    $editing = makeDividerGroup([
+        Action::make('discount'),
+        Action::make('tax'),
+        Action::make('rounding'),
+    ]);
+    $billing = makeDividerGroup([
+        Action::make('change-billing'),
+        Action::make('refresh'),
+        Action::make('hold'),
+    ]);
+
+    $composed = ActionOverflow::make([$submit, $print, $editing, $billing])
+        ->primaryCount(1)
+        ->toActions();
+
+    expect($composed)->toHaveCount(2)
+        ->and($composed[0])->toBe($submit)
+        ->and($composed[1])->toBeInstanceOf(ActionGroup::class);
+
+    /** @var ActionGroup $moreGroup */
+    $moreGroup = $composed[1];
+    $overflowItems = $moreGroup->getActions();
+
+    expect($overflowItems)->toHaveCount(3);
+    expect($overflowItems[0]->getName())->toBe('print');
+    expect($overflowItems[1])->toBeInstanceOf(ActionGroup::class);
+    expect($overflowItems[1]->hasDropdown())->toBeFalse();
+    expect(array_map(fn ($a) => $a->getName(), $overflowItems[1]->getActions()))
+        ->toBe(['discount', 'tax', 'rounding']);
+    expect($overflowItems[2])->toBeInstanceOf(ActionGroup::class);
+    expect($overflowItems[2]->hasDropdown())->toBeFalse();
+    expect(array_map(fn ($a) => $a->getName(), $overflowItems[2]->getActions()))
+        ->toBe(['change-billing', 'refresh', 'hold']);
 });
 
 it('unwraps dividers alongside other overflow actions preserving all children', function (): void {
@@ -494,7 +537,7 @@ it('drops a divider whose children are all extracted as primary', function (): v
         ->and($composed[1])->toBe($other);
 });
 
-it('skips unavailable divider children for primary but keeps them in overflow divider', function (): void {
+it('drops unavailable divider children entirely so they never appear in primary or overflow', function (): void {
     $hidden = Action::make('hidden-child')->hidden();
     $visible = Action::make('visible-child');
 
@@ -509,6 +552,45 @@ it('skips unavailable divider children for primary but keeps them in overflow di
     expect($composed)->toHaveCount(2)
         ->and($composed[0]->getName())->toBe('visible-child')
         ->and($composed[1])->toBeInstanceOf(ActionGroup::class);
+
+    /** @var ActionGroup $moreGroup */
+    $moreGroup = $composed[1];
+
+    expect(collect($moreGroup->getActions())->pluck('name')->all())
+        ->not->toContain('hidden-child');
+});
+
+it('drops hidden divider children that would otherwise land in overflow', function (): void {
+    $a = Action::make('a');
+    $hidden = Action::make('hidden-overflow-child')->hidden();
+    $visible = Action::make('visible-overflow-child');
+    $divider = makeDividerGroup([$hidden, $visible]);
+
+    $composed = ActionOverflow::make([$a, $divider, Action::make('z')])
+        ->primaryCount(1)
+        ->toActions();
+
+    expect($composed)->toHaveCount(2)
+        ->and($composed[0]->getName())->toBe('a')
+        ->and($composed[1])->toBeInstanceOf(ActionGroup::class);
+
+    /** @var ActionGroup $moreGroup */
+    $moreGroup = $composed[1];
+
+    $names = [];
+    foreach ($moreGroup->getActions() as $item) {
+        if ($item instanceof ActionGroup && ! $item->hasDropdown()) {
+            foreach ($item->getActions() as $child) {
+                $names[] = $child->getName();
+            }
+
+            continue;
+        }
+
+        $names[] = $item->getName();
+    }
+
+    expect($names)->not->toContain('hidden-overflow-child');
 });
 
 it('exposes a withOverflow macro on ActionGroup that matches direct composition', function (): void {

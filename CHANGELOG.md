@@ -2,6 +2,23 @@
 
 All notable changes to `filament-action-overflow` will be documented in this file.
 
+## 1.1.0 - 2026-05-05
+
+### Fixed
+- Hidden / invisible / (when enabled) unauthorized children of `dropdown(false)` divider groups now never appear in the **More** menu. `filterAvailableActions()` recurses into dividers and drops dividers whose children are all unavailable.
+- Two non-empty `dropdown(false)` groups that both land in overflow are now preserved as separate sections instead of being collapsed into one. The "adjacent dividers" rule and the "trailing divider" unwrap were too aggressive and discarded user-authored separators.
+- The "single overflow item gets flattened" optimization no longer counts dividers as having zero actions — divider children are tallied, so a flat list with only divider sections renders correctly under **More**.
+- The published config (`config/action-overflow.php`) no longer references Filament 5-only enum constants. Defaults are stored as strings so the file loads on both Filament 4 and 5.
+
+### Changed
+- Sanitizer behavior simplified: only a *leading* divider is unwrapped (an orphan separator above the first item). Trailing and adjacent dividers are preserved as distinct sections, matching Filament's native rendering of multiple `dropdown(false)` groups.
+- Internal API tightened: `ActionOverflow`, `ActionOverflowManager`, and `FilamentCompatibility` are now `final`. Properties and helper methods are `private`. `declare(strict_types=1);` added across the package.
+- Removed unused `resources/lang/en/action-overflow.php` and the corresponding `hasTranslations()` registration.
+- Cleaned up `composer.json` `allow-plugins` entries that were never required.
+
+### Docs
+- README rewritten for clarity with a visual example, simpler structure, and a reference table for config keys.
+
 ## 1.0.3 - 2026-04-12
 
 - Fixed missing trailing newline in service provider for consistent code style.

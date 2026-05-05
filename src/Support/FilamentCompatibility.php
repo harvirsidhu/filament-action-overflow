@@ -1,8 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Harvirsidhu\FilamentActionOverflow\Support;
 
-class FilamentCompatibility
+final class FilamentCompatibility
 {
     public static function defaultMoreIcon(): string
     {

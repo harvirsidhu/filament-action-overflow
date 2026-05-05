@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Harvirsidhu\FilamentActionOverflow\Facades;
 
 use Harvirsidhu\FilamentActionOverflow\ActionOverflowManager;
