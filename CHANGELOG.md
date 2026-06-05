@@ -2,6 +2,15 @@
 
 All notable changes to `filament-action-overflow` will be documented in this file.
 
+## 1.1.1 - 2026-06-06
+
+### Added
+- `ActionOverflow::morePosition()` and a `MorePosition` enum (`Start` / `End`) to place the **More** control before or after the primary actions. Accepts the enum or the string forms `'start'` / `'end'`, and is configurable via the new `more_position` config key (default `end`).
+- The position also applies when overflow collapses to a single flattened action, not just the grouped **More** trigger.
+
+### Notes
+- `Start` is direction-aware: composition only reorders the action array and Filament renders it in the reading direction, so it lands left in LTR and flips to the right under RTL — no extra RTL configuration needed.
+
 ## 1.1.0 - 2026-05-05
 
 ### Fixed
