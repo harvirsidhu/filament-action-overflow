@@ -83,6 +83,31 @@ return ActionOverflow::make([
     ->toActions();
 ```
 
+## Positioning the More button
+
+By default the **More** control sits *after* the primary actions. Pass `MorePosition::Start` to put it first instead:
+
+```php
+use Filament\Actions\Action;
+use Harvirsidhu\FilamentActionOverflow\Enums\MorePosition;
+use Harvirsidhu\FilamentActionOverflow\Facades\ActionOverflow;
+
+return ActionOverflow::make([
+    Action::make('edit'),
+    Action::make('archive'),
+    Action::make('delete'),
+])
+    ->morePosition(MorePosition::Start)
+    ->toActions();
+// → [ ⋮ More ▾ (Archive, Delete) ] [ Edit ]
+```
+
+`morePosition()` also accepts the string forms `'start'` / `'end'`.
+
+`Start` is **direction-aware**: the package only reorders the action array, and Filament renders it in the reading direction — so `Start` lands on the left in LTR layouts and automatically flips to the right under RTL. There's nothing extra to configure for RTL.
+
+The same positioning applies when overflow collapses to a single flattened action, not just the **More** group.
+
 ## Dividers (sections inside the More menu)
 
 A `dropdown(false)` group nested inside another `ActionGroup` is Filament's way of saying *"render these as a separated section."* This package treats them as first-class:
@@ -163,6 +188,7 @@ return ActionOverflow::make($actions)
 | `button`              | `bool`         | `true`                           | Promote primary + trigger to button view      |
 | `icon_position`       | `string\|enum` | `'after'`                        | `'before'` or `'after'` (or `IconPosition`)   |
 | `filter_unauthorized` | `bool`         | `false`                          | Drop unauthorized actions before composing    |
+| `more_position`       | `string\|enum` | `'end'`                          | `'start'` or `'end'` (or `MorePosition`)      |
 
 `icon` accepts a string, a `BackedEnum` (e.g. `Filament\Support\Icons\Heroicon::EllipsisVertical` on Filament 5), or `null` for the default. `icon_position` accepts the string forms or a `Filament\Support\Enums\IconPosition` enum. Strings are the published defaults so the file loads cleanly on both Filament 4 and 5.
 
@@ -178,6 +204,7 @@ ActionOverflow::make($actions)
     ->button(bool $state = true)
     ->iconPosition(\Filament\Support\Enums\IconPosition|string|\BackedEnum|null $position = \Filament\Support\Enums\IconPosition::After)
     ->filterUnauthorized(bool $state = true)
+    ->morePosition(\Harvirsidhu\FilamentActionOverflow\Enums\MorePosition|string $position = \Harvirsidhu\FilamentActionOverflow\Enums\MorePosition::End)
     ->toActions();
 ```
 

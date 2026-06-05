@@ -9,6 +9,7 @@ use Filament\Actions\ActionGroup;
 use Filament\Support\Contracts\ScalableIcon;
 use Filament\Support\Enums\IconPosition;
 use Filament\Support\Enums\IconSize;
+use Harvirsidhu\FilamentActionOverflow\Enums\MorePosition;
 use Harvirsidhu\FilamentActionOverflow\Support\FilamentCompatibility;
 use InvalidArgumentException;
 use Throwable;
@@ -28,6 +29,7 @@ final class ActionOverflow
         private bool $button = true,
         private IconPosition $iconPosition = IconPosition::After,
         private bool $filterUnauthorized = false,
+        private MorePosition $morePosition = MorePosition::End,
     ) {
         $this->icon ??= $this->resolveDefaultMoreIcon();
     }
@@ -47,6 +49,7 @@ final class ActionOverflow
             button: (bool) config('action-overflow.button', true),
             iconPosition: self::normalizeIconPosition(config('action-overflow.icon_position', IconPosition::After)),
             filterUnauthorized: (bool) config('action-overflow.filter_unauthorized', false),
+            morePosition: self::normalizeMorePosition(config('action-overflow.more_position', MorePosition::End)),
         );
     }
 
@@ -110,6 +113,13 @@ final class ActionOverflow
         return $this;
     }
 
+    public function morePosition(MorePosition | string $position = MorePosition::End): self
+    {
+        $this->morePosition = self::normalizeMorePosition($position);
+
+        return $this;
+    }
+
     /**
      * @return array<mixed>
      */
@@ -144,10 +154,27 @@ final class ActionOverflow
         }
 
         if ($overflowActionCount === 1) {
-            return [...$primary, $this->promoteToButton($onlyAction)];
+            return $this->placeOverflow($primary, $this->promoteToButton($onlyAction));
         }
 
-        return [...$primary, $this->makeMoreGroup($overflow)];
+        return $this->placeOverflow($primary, $this->makeMoreGroup($overflow));
+    }
+
+    /**
+     * Positions the overflow control (the "More" group, or a flattened
+     * single overflow action) before or after the primary actions, per
+     * the configured `morePosition`.
+     *
+     * @param  array<mixed>  $primary
+     * @return array<mixed>
+     */
+    private function placeOverflow(array $primary, mixed $overflow): array
+    {
+        if ($this->morePosition === MorePosition::Start) {
+            return [$overflow, ...$primary];
+        }
+
+        return [...$primary, $overflow];
     }
 
     private function promoteToButton(mixed $action): mixed
@@ -421,5 +448,18 @@ final class ActionOverflow
         }
 
         throw new InvalidArgumentException('Icon position must be a Filament IconPosition enum value.');
+    }
+
+    private static function normalizeMorePosition(mixed $position): MorePosition
+    {
+        if ($position instanceof MorePosition) {
+            return $position;
+        }
+
+        if (is_string($position) && MorePosition::tryFrom($position) !== null) {
+            return MorePosition::from($position);
+        }
+
+        throw new InvalidArgumentException("More position must be a MorePosition enum value or one of 'start', 'end'.");
     }
 }

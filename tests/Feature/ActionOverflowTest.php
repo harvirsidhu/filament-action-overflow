@@ -5,6 +5,7 @@ use Filament\Actions\ActionGroup;
 use Filament\Support\Enums\IconPosition;
 use Filament\Support\Icons\Heroicon;
 use Harvirsidhu\FilamentActionOverflow\ActionOverflow;
+use Harvirsidhu\FilamentActionOverflow\Enums\MorePosition;
 
 enum FakeMoreIcon: string
 {
@@ -175,6 +176,66 @@ it('accepts icon position as string values', function (): void {
 
     expect(getConfiguredValue($group, ['iconPosition']))->toBe('before');
 });
+
+it('appends the more group after primary actions by default', function (): void {
+    $actions = makeActions(['view', 'edit', 'archive']);
+
+    $composed = ActionOverflow::make($actions)->toActions();
+
+    expect($composed)->toHaveCount(2)
+        ->and($composed[0])->toBe($actions[0])
+        ->and($composed[1])->toBeInstanceOf(ActionGroup::class);
+});
+
+it('places the more group before primary actions when morePosition is start', function (): void {
+    $actions = makeActions(['view', 'edit', 'archive']);
+
+    $composed = ActionOverflow::make($actions)
+        ->morePosition(MorePosition::Start)
+        ->toActions();
+
+    expect($composed)->toHaveCount(2)
+        ->and($composed[0])->toBeInstanceOf(ActionGroup::class)
+        ->and($composed[1])->toBe($actions[0]);
+});
+
+it('places a flattened single overflow action before primary when morePosition is start', function (): void {
+    $actions = makeActions(['view', 'edit']);
+
+    $composed = ActionOverflow::make($actions)
+        ->morePosition(MorePosition::Start)
+        ->toActions();
+
+    expect($composed)->toHaveCount(2)
+        ->and($composed[0])->toBe($actions[1])
+        ->and($composed[1])->toBe($actions[0]);
+});
+
+it('accepts more position as a string value', function (): void {
+    $actions = makeActions(['view', 'edit', 'archive']);
+
+    $composed = ActionOverflow::make($actions)
+        ->morePosition('start')
+        ->toActions();
+
+    expect($composed[0])->toBeInstanceOf(ActionGroup::class)
+        ->and($composed[1])->toBe($actions[0]);
+});
+
+it('reads more position from config', function (): void {
+    config()->set('action-overflow.more_position', 'start');
+
+    $actions = makeActions(['view', 'edit', 'archive']);
+    $composed = ActionOverflow::make($actions)->toActions();
+
+    expect($composed[0])->toBeInstanceOf(ActionGroup::class)
+        ->and($composed[1])->toBe($actions[0]);
+});
+
+it('rejects an invalid more position string', function (): void {
+    ActionOverflow::make(makeActions(['view', 'edit', 'archive']))
+        ->morePosition('center');
+})->throws(InvalidArgumentException::class);
 
 it('returns actions with toActions', function (): void {
     $actions = makeActions(['view', 'edit', 'archive']);
