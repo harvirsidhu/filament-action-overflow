@@ -2,6 +2,18 @@
 
 All notable changes to `filament-action-overflow` will be documented in this file.
 
+## 1.1.2 - 2026-07-21
+
+### Security
+- Added `SECURITY.md` documenting supported versions, private disclosure channels, and response timelines.
+- Added Dependabot config for `composer` and `github-actions` updates, with a cooldown window so freshly published releases are not adopted immediately.
+
+### Added
+- CI workflows: Pest across PHP 8.2/8.3/8.4, plus PHPStan and Pint. All third-party actions are pinned to full commit SHAs.
+
+### Notes
+- No library code changed in this release; it contains repository and supply-chain hardening only. `.github/` is `export-ignore`d, so the distributed archive gains only `SECURITY.md`.
+
 ## 1.1.1 - 2026-06-06
 
 ### Added
