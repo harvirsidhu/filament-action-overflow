@@ -3,9 +3,12 @@
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Support\Enums\IconPosition;
+use Filament\Support\Facades\FilamentAsset;
 use Filament\Support\Icons\Heroicon;
 use Harvirsidhu\FilamentActionOverflow\ActionOverflow;
 use Harvirsidhu\FilamentActionOverflow\Enums\MorePosition;
+use Illuminate\Database\Eloquent\Model;
+use Livewire\Component;
 
 enum FakeMoreIcon: string
 {
@@ -86,6 +89,75 @@ it('supports configurable more presentation options', function (): void {
     expect(getConfiguredValue($group, ['label'], 'getLabel'))->toBe('Options')
         ->and(getConfiguredValue($group, ['icon'], 'getIcon'))->toBe('heroicon-m-bars-3')
         ->and(getConfiguredValue($group, ['color'], 'getColor'))->toBe('danger');
+});
+
+it('labels the more menu "More" in English', function (): void {
+    /** @var ActionGroup $group */
+    $group = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))->toActions()[1];
+
+    expect($group->getLabel())->toBe('More');
+});
+
+it('labels the more menu in the app\'s language', function (): void {
+    app()->setLocale('ms');
+
+    /** @var ActionGroup $group */
+    $group = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))->toActions()[1];
+    /** @var ActionGroup $menu */
+    $menu = ActionOverflow::make(makeActions(['callNext', 'counterOne']))->split()->toActions()[0]->getActions()[1];
+
+    expect($group->getLabel())->toBe('Lagi')
+        ->and($menu->getTooltip())->toBe('Lagi');
+});
+
+it('uses a label given in code as given, and label() goes back to the translated default', function (): void {
+    app()->setLocale('ms');
+    app('translator')->addLines(['*.Options' => 'Pilihan'], 'ms');
+
+    /** @var ActionGroup $given */
+    $given = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))->label('Options')->toActions()[1];
+    /** @var ActionGroup $reset */
+    $reset = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))->label('Options')->label()->toActions()[1];
+
+    expect($given->getLabel())->toBe('Options')
+        ->and($reset->getLabel())->toBe('Lagi');
+});
+
+it('translates a label set in the config from the app\'s own lang files', function (): void {
+    app()->setLocale('ms');
+    app('translator')->addLines(['*.Manage' => 'Urus'], 'ms');
+    config()->set('action-overflow.label', 'Manage');
+
+    /** @var ActionGroup $group */
+    $group = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))->toActions()[1];
+
+    expect($group->getLabel())->toBe('Urus');
+});
+
+it('treats "More" in an older published config as the translated default', function (): void {
+    app()->setLocale('ms');
+    config()->set('action-overflow.label', 'More');
+
+    /** @var ActionGroup $group */
+    $group = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))->toActions()[1];
+
+    expect($group->getLabel())->toBe('Lagi');
+});
+
+it('has the more label in every language it ships', function (): void {
+    $files = glob(dirname(__DIR__, 2) . '/resources/lang/*/action-overflow.php') ?: [];
+
+    expect(count($files))->toBeGreaterThan(40);
+
+    foreach ($files as $file) {
+        $lines = require $file;
+
+        expect($lines)->toHaveKey('more')
+            ->and($lines['more'])->toBeString()->not->toBe('');
+    }
+
+    expect(trans('filament-action-overflow::action-overflow.more', [], 'en'))->toBe('More')
+        ->and(trans('filament-action-overflow::action-overflow.more', [], 'zh_CN'))->toBe('更多');
 });
 
 it('accepts a backed enum icon with moreIcon', function (): void {
@@ -285,6 +357,30 @@ it('can filter unauthorized actions when enabled', function (): void {
 
     expect($composed)->toHaveCount(1)
         ->and($composed[0])->toBe($view);
+});
+
+it('attaches the actions to the page before reading their visibility', function (): void {
+    $page = new class extends Component {};
+    $publish = Action::make('publish')->visible(fn ($livewire): bool => $livewire !== null);
+
+    $withoutPage = ActionOverflow::make([Action::make('edit'), $publish])->toActions();
+    $withPage = ActionOverflow::make([Action::make('edit'), $publish])->livewire($page)->toActions();
+
+    expect($withoutPage)->toHaveCount(1)
+        ->and($withPage)->toHaveCount(2)
+        ->and($withPage[1])->toBe($publish)
+        ->and($publish->getLivewire())->toBe($page);
+});
+
+it('attaches divider children to the page so they keep their place', function (): void {
+    $page = new class extends Component {};
+    $publish = Action::make('publish')->visible(fn ($livewire): bool => $livewire !== null);
+
+    $composed = ActionOverflow::make([
+        makeDividerGroup([$publish, Action::make('archive'), Action::make('delete')]),
+    ])->livewire($page)->toActions();
+
+    expect($composed[0])->toBe($publish);
 });
 
 it('preserves a divider between actions inside the overflow group', function (): void {
@@ -713,6 +809,281 @@ it('withOverflow macro supports dividers from nested dropdown(false) groups', fu
     expect($overflowItems[1]->hasDropdown())->toBeFalse();
     expect($overflowItems[2]->getName())->toBe('delete');
     expect($overflowItems[3]->getName())->toBe('download');
+});
+
+it('withOverflow macro uses the configured primary count when given none', function (): void {
+    config()->set('action-overflow.primary_count', 2);
+
+    $composed = ActionGroup::make(makeActions(['edit', 'archive', 'publish', 'delete']))->withOverflow();
+
+    expect($composed)->toHaveCount(3)
+        ->and($composed[0]->getName())->toBe('edit')
+        ->and($composed[1]->getName())->toBe('archive')
+        ->and($composed[2])->toBeInstanceOf(ActionGroup::class);
+});
+
+it('withOverflow macro leaves each action its own view', function (): void {
+    config()->set('action-overflow.button', false);
+
+    $composed = ActionGroup::make(makeActions(['edit', 'archive']))->withOverflow();
+    $ownView = Action::make('reference')->getView();
+
+    expect($composed[0]->getView())->toBe($ownView)
+        ->and($composed[1]->getView())->toBe($ownView);
+});
+
+it('withOverflow macro leaves a nested group out front to open where Filament puts it', function (): void {
+    $export = ActionGroup::make(makeActions(['csv', 'pdf']))->label('Export');
+
+    $composed = ActionGroup::make([$export, ...makeActions(['edit', 'delete'])])->withOverflow();
+
+    expect($composed[0])->toBe($export)
+        ->and($export->getDropdownPlacement())->toBeNull()
+        ->and($export->getGroup())->toBeNull();
+});
+
+it('withOverflow and withSplit macros hide every action of a hidden group', function (): void {
+    expect(ActionGroup::make(makeActions(['edit', 'archive', 'delete']))->hidden()->withOverflow())->toBe([])
+        ->and(ActionGroup::make(makeActions(['callNext', 'counterOne']))->visible(false)->withSplit())->toBe([]);
+});
+
+it('withOverflow macro hides nothing when the group\'s condition cannot be read yet', function (): void {
+    $composed = ActionGroup::make(makeActions(['edit', 'archive']))
+        ->visible(fn (Model $record): bool => false)
+        ->withOverflow();
+
+    expect($composed)->toHaveCount(2);
+});
+
+it('withOverflow macro passes on the livewire() set on the group', function (): void {
+    $page = new class extends Component {};
+
+    $composed = ActionGroup::make([
+        makeDividerGroup([
+            Action::make('publish')->visible(fn ($livewire): bool => $livewire !== null),
+            Action::make('archive'),
+            Action::make('delete'),
+        ]),
+    ])->livewire($page)->withOverflow();
+
+    expect($composed[0]->getName())->toBe('publish');
+});
+
+it('joins the primary action and the menu into one button group when split', function (): void {
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    $composed = ActionOverflow::make($actions)->split()->toActions();
+
+    expect($composed)->toHaveCount(1)
+        ->and($composed[0])->toBeInstanceOf(ActionGroup::class)
+        ->and($composed[0]->isButtonGroup())->toBeTrue();
+
+    $parts = $composed[0]->getActions();
+
+    expect($parts)->toHaveCount(2)
+        ->and($parts[0])->toBe($actions[0])
+        ->and($parts[1])->toBeInstanceOf(ActionGroup::class)
+        ->and($parts[1]->getActions())->toBe([$actions[1], $actions[2]]);
+});
+
+it('keeps a single leftover action in the split menu', function (): void {
+    $actions = makeActions(['callNext', 'counterOne']);
+
+    $parts = ActionOverflow::make($actions)->split()->toActions()[0]->getActions();
+
+    expect($parts[1])->toBeInstanceOf(ActionGroup::class)
+        ->and($parts[1]->getActions())->toBe([$actions[1]]);
+});
+
+it('shows only the main button when split has nothing to put in the menu', function (): void {
+    $actions = makeActions(['callNext']);
+
+    $composed = ActionOverflow::make($actions)->split()->toActions();
+
+    expect($composed)->toBe($actions);
+});
+
+it('draws the split menu as an icon-only chevron in the main button colour', function (): void {
+    $actions = [Action::make('callNext')->color('success'), ...makeActions(['counterOne', 'counterTwo'])];
+
+    /** @var ActionGroup $menu */
+    $menu = ActionOverflow::make($actions)->split()->toActions()[0]->getActions()[1];
+
+    expect(getConfiguredValue($menu, ['icon'], 'getIcon'))->toBe('heroicon-m-chevron-down')
+        ->and(getConfiguredValue($menu, ['color'], 'getColor'))->toBe('success')
+        ->and(getConfiguredValue($menu, ['tooltip'], 'getTooltip'))->toBe('More')
+        ->and(getConfiguredValue($menu, ['isLabelHidden'], 'isLabelHidden'))->toBeTrue()
+        ->and($menu->isButton())->toBeTrue();
+});
+
+it('colours the split menu primary when the main button has no colour of its own', function (): void {
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    /** @var ActionGroup $menu */
+    $menu = ActionOverflow::make($actions)->split()->toActions()[0]->getActions()[1];
+
+    expect(getConfiguredValue($menu, ['color'], 'getColor'))->toBe('primary');
+});
+
+it('keeps an explicit icon and colour on the split menu', function (): void {
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    /** @var ActionGroup $menu */
+    $menu = ActionOverflow::make($actions)
+        ->split()
+        ->icon('heroicon-m-bars-3')
+        ->color('gray')
+        ->toActions()[0]
+        ->getActions()[1];
+
+    expect(getConfiguredValue($menu, ['icon'], 'getIcon'))->toBe('heroicon-m-bars-3')
+        ->and(getConfiguredValue($menu, ['color'], 'getColor'))->toBe('gray');
+});
+
+it('puts the split menu first when morePosition is start', function (): void {
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    $parts = ActionOverflow::make($actions)
+        ->split()
+        ->morePosition(MorePosition::Start)
+        ->toActions()[0]
+        ->getActions();
+
+    expect($parts[0])->toBeInstanceOf(ActionGroup::class)
+        ->and($parts[1])->toBe($actions[0]);
+});
+
+it('drops the split menu below the button, along its outer edge', function (): void {
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    /** @var ActionGroup $end */
+    $end = ActionOverflow::make($actions)->split()->toActions()[0]->getActions()[1];
+    /** @var ActionGroup $start */
+    $start = ActionOverflow::make(makeActions(['callNext', 'counterOne', 'counterTwo']))
+        ->split()
+        ->morePosition(MorePosition::Start)
+        ->toActions()[0]
+        ->getActions()[0];
+
+    expect($end->getDropdownPlacement())->toBe('bottom-end')
+        ->and($start->getDropdownPlacement())->toBe('bottom-start');
+});
+
+it('marks the split menu for the split button stylesheet', function (): void {
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    /** @var ActionGroup $menu */
+    $menu = ActionOverflow::make($actions)->split()->toActions()[0]->getActions()[1];
+
+    expect(getConfiguredValue($menu, ['extraDropdownAttributes'], 'getExtraDropdownAttributes'))
+        ->toHaveKey('class', 'fi-ao-split-menu');
+});
+
+it('leaves hidden actions out of the split menu', function (): void {
+    $actions = [
+        Action::make('callNext'),
+        Action::make('counterOne')->hidden(),
+        Action::make('counterTwo'),
+        Action::make('counterThree'),
+    ];
+
+    $parts = ActionOverflow::make($actions)->split()->toActions()[0]->getActions();
+
+    expect($parts[1]->getActions())->toBe([$actions[2], $actions[3]]);
+});
+
+it('refuses a split button with other than one main action', function (int $count): void {
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    ActionOverflow::make($actions)->primaryCount($count)->split()->toActions();
+})->with([0, 2])->throws(InvalidArgumentException::class, 'A split button has one main action.');
+
+it('refuses a split button with two main actions whatever the call order', function (): void {
+    ActionOverflow::make(makeActions(['callNext', 'counterOne', 'counterTwo']))
+        ->split()
+        ->primaryCount(2)
+        ->toActions();
+})->throws(InvalidArgumentException::class, 'A split button has one main action.');
+
+it('keeps one main action in a split button whatever the configured primary count', function (): void {
+    config()->set('action-overflow.primary_count', 2);
+
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    $parts = ActionOverflow::make($actions)->split()->toActions()[0]->getActions();
+    $viaMacro = ActionGroup::make(makeActions(['callNext', 'counterOne', 'counterTwo']))->withSplit()[0]->getActions();
+
+    expect($parts[0])->toBe($actions[0])
+        ->and($parts[1]->getActions())->toBe([$actions[1], $actions[2]])
+        ->and($viaMacro[0]->getName())->toBe('callNext');
+});
+
+it('makes the next available action the main one when the first is hidden', function (): void {
+    $actions = [
+        Action::make('callNext')->hidden(),
+        Action::make('counterOne'),
+        Action::make('counterTwo'),
+        Action::make('counterThree'),
+    ];
+
+    $parts = ActionOverflow::make($actions)->split()->toActions()[0]->getActions();
+
+    expect($parts[0])->toBe($actions[1])
+        ->and($parts[1]->getActions())->toBe([$actions[2], $actions[3]]);
+});
+
+it('opens the more menu where dropdownPlacement says', function (): void {
+    /** @var ActionGroup $group */
+    $group = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))
+        ->dropdownPlacement('top-end')
+        ->toActions()[1];
+
+    expect($group->getDropdownPlacement())->toBe('top-end');
+});
+
+it('leaves the more menu to Filament\'s own placement when none is set', function (): void {
+    /** @var ActionGroup $group */
+    $group = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))->toActions()[1];
+
+    expect($group->getDropdownPlacement())->toBeNull();
+});
+
+it('opens the split menu where dropdownPlacement says', function (): void {
+    /** @var ActionGroup $menu */
+    $menu = ActionOverflow::make(makeActions(['callNext', 'counterOne', 'counterTwo']))
+        ->split()
+        ->dropdownPlacement('bottom-start')
+        ->toActions()[0]
+        ->getActions()[1];
+
+    expect($menu->getDropdownPlacement())->toBe('bottom-start');
+});
+
+it('exposes a withSplit macro on ActionGroup that matches split composition', function (): void {
+    $callNext = Action::make('callNext');
+    $counterOne = Action::make('counterOne');
+    $counterTwo = Action::make('counterTwo');
+
+    /** @var array<int, mixed> $composed */
+    $composed = ActionGroup::make([$callNext, $counterOne, $counterTwo])->withSplit();
+
+    expect($composed)->toHaveCount(1)
+        ->and($composed[0]->isButtonGroup())->toBeTrue();
+
+    $parts = $composed[0]->getActions();
+
+    expect($parts[0]->getName())->toBe('callNext')
+        ->and(array_map(static fn (Action $action): string => $action->getName(), $parts[1]->getActions()))
+        ->toBe(['counterOne', 'counterTwo']);
+});
+
+it('registers the split button stylesheet', function (): void {
+    $ids = array_map(
+        static fn (object $asset): string => $asset->getId(),
+        FilamentAsset::getStyles(['harvirsidhu/filament-action-overflow']),
+    );
+
+    expect($ids)->toContain('filament-action-overflow');
 });
 
 /**

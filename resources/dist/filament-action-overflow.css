@@ -1,0 +1,39 @@
+/*
+ * filament-action-overflow: the split button (ActionOverflow::split()).
+ *
+ * Filament's button group (.fi-btn-group) joins plain buttons only. The More
+ * menu's button sits one level down, inside its dropdown
+ * (.fi-dropdown.fi-ao-split-menu > .fi-dropdown-trigger > .fi-btn). These
+ * rules square the corners where the main button and the menu's button meet,
+ * draw a thin divider in the button's own text colour (so it suits any colour,
+ * and dark mode), and narrow the menu's button to its chevron. Logical
+ * properties keep it right in right-to-left layouts.
+ */
+
+.fi-btn-group > .fi-dropdown.fi-ao-split-menu > .fi-dropdown-trigger > .fi-btn {
+    padding-inline: 0.5rem;
+}
+
+/* The menu after the main button (morePosition end, the default). */
+.fi-btn-group > .fi-btn:has(+ .fi-dropdown.fi-ao-split-menu).fi-btn {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+}
+
+.fi-btn-group > .fi-dropdown.fi-ao-split-menu:last-child > .fi-dropdown-trigger > .fi-btn {
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+    border-inline-start: 1px solid color-mix(in oklab, currentColor 25%, transparent);
+}
+
+/* The menu before the main button (morePosition start). */
+.fi-btn-group > .fi-dropdown.fi-ao-split-menu + .fi-btn.fi-btn {
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+}
+
+.fi-btn-group > .fi-dropdown.fi-ao-split-menu:first-child > .fi-dropdown-trigger > .fi-btn {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+    border-inline-end: 1px solid color-mix(in oklab, currentColor 25%, transparent);
+}

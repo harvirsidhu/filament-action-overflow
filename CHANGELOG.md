@@ -2,6 +2,23 @@
 
 All notable changes to `filament-action-overflow` will be documented in this file.
 
+## 1.2.0 - 2026-11-02
+
+### Added
+- `ActionOverflow::split()` joins the main action and its **More** menu into one control: a split button, for one action and its variants. It has exactly one main action, whatever `primary_count` the config sets (`toActions()` throws if `primaryCount()` asks for another). The menu's trigger becomes an icon-only chevron in the main button's colour (unless `icon()` or `color()` are set), a single leftover action stays in the menu, the menu opens below the button along its outer edge, and `morePosition(MorePosition::Start)` puts the menu first.
+- `ActionGroup::withSplit()`, the one-line form of a split button, like `withOverflow()`.
+- `ActionOverflow::dropdownPlacement()`, Filament's own placement (`'bottom-start'`, `'bottom-end'`, `'top-end'`…) for the menu, in both modes. Unset, the **More** menu keeps Filament's default for where it sits.
+- `ActionOverflow::livewire()` attaches every action, divider children included, to the page before their visibility is read, so a `visible()` / `hidden()` closure that reads `$livewire` or `$record` gets them. Filament attaches a page's header actions only after `getHeaderActions()` returns, so until now such a closure got `null`. The macros pass on a `livewire()` set on the group.
+- A small stylesheet, registered with Filament's asset manager, that joins the split button's two halves. It is published with the app's other Filament assets by `php artisan filament:assets`.
+- The **More** label is shown in the app's language, with 49 languages included (`resources/lang`; publish them with `--tag="filament-action-overflow-translations"` to change a word or add a language). The config's `label` is now `null`, meaning that default, and a string set there is translated from the app's own lang files. `'More'`, which older published config files carry, counts as the default. `label()` now takes `?string`: with nothing it goes back to the default. A label given in code is used as given.
+
+### Fixed
+- `withOverflow()` called without a count uses the configured `primary_count`, as the README said, instead of always `1`.
+- The macros compose the group's actions as if they had been listed directly. The group they were listed in stayed their parent, and through it Filament gave every action its dropdown-item view as its default (so with `button => false` the actions out front were drawn as menu rows), and had a nested group out front open to the side, as a submenu. A group hidden by its own `hidden()` / `visible()` still hides all of its actions.
+
+### Docs
+- README: three ways to use it (two macros and the builder); the table methods of Filament 4 and 5 (`recordActions()`, `headerActions()`, `toolbarActions()`) in place of ones they don't have; the split stylesheet under Installation; what the config does to a split button; the split menu's label as its tooltip and screen-reader name; visibility that depends on the page or the record, and why a table can't vary by row.
+
 ## 1.1.2 - 2026-07-21
 
 ### Security

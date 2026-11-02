@@ -16,6 +16,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Composer picks the Filament version. PHP 8.2 gets Filament 4:
+        # pest-plugin-livewire 4 needs PHP 8.3, and 3 needs Livewire 3. PHP 8.3
+        # and 8.4 get Filament 5. Filament 4.0.x can't be installed at all: it
+        # has security advisories, which Composer refuses to install.
         php: ['8.2', '8.3', '8.4']
 
     name: PHP ${{ matrix.php }}

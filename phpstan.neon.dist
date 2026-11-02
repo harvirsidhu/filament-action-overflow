@@ -15,6 +15,7 @@ parameters:
         # require either a @phpstan-ignore comment or a baseline entry, both
         # of which are disallowed by project policy.
         - src/Macros/with_overflow_macro.php
+        - src/Macros/with_split_macro.php
     tmpDir: build/phpstan
     checkOctaneCompatibility: true
     checkModelProperties: true

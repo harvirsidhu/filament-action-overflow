@@ -12,17 +12,32 @@ use Filament\Support\Enums\IconSize;
 use Harvirsidhu\FilamentActionOverflow\Enums\MorePosition;
 use Harvirsidhu\FilamentActionOverflow\Support\FilamentCompatibility;
 use InvalidArgumentException;
+use Livewire\Component;
 use Throwable;
 
 final class ActionOverflow
 {
+    /** The More label in English, and what older published config files carry. */
+    private const DEFAULT_LABEL = 'More';
+
+    /** The More label in the app's language (resources/lang). */
+    private const DEFAULT_LABEL_KEY = 'filament-action-overflow::action-overflow.more';
+
+    private bool $hasExplicitPrimaryCount = false;
+
+    private bool $hasExplicitIcon = false;
+
+    private bool $hasExplicitColor = false;
+
+    private ?Component $livewire = null;
+
     /**
      * @param  array<mixed>  $actions
      */
     public function __construct(
         private readonly array $actions,
         private int $primaryCount = 1,
-        private string $label = 'More',
+        private ?string $label = null,
         private ?string $icon = null,
         private string $color = 'gray',
         private bool $hiddenLabel = false,
@@ -30,6 +45,8 @@ final class ActionOverflow
         private IconPosition $iconPosition = IconPosition::After,
         private bool $filterUnauthorized = false,
         private MorePosition $morePosition = MorePosition::End,
+        private bool $split = false,
+        private ?string $dropdownPlacement = null,
     ) {
         $this->icon ??= $this->resolveDefaultMoreIcon();
     }
@@ -42,7 +59,7 @@ final class ActionOverflow
         return new self(
             actions: $actions,
             primaryCount: (int) config('action-overflow.primary_count', 1),
-            label: (string) config('action-overflow.label', 'More'),
+            label: self::normalizeLabel(config('action-overflow.label')),
             icon: self::normalizeIcon(config('action-overflow.icon')),
             color: (string) config('action-overflow.color', 'gray'),
             hiddenLabel: (bool) config('action-overflow.hidden_label', false),
@@ -60,11 +77,17 @@ final class ActionOverflow
         }
 
         $this->primaryCount = $count;
+        $this->hasExplicitPrimaryCount = true;
 
         return $this;
     }
 
-    public function label(string $label = 'More'): self
+    /**
+     * The More trigger's label (a split menu's tooltip and screen-reader
+     * name), used as given: wrap it in `__()` to translate it. `null` goes
+     * back to the default, "More" in the app's language.
+     */
+    public function label(?string $label = null): self
     {
         $this->label = $label;
 
@@ -74,6 +97,7 @@ final class ActionOverflow
     public function icon(string | BackedEnum | null $icon = null): self
     {
         $this->icon = self::normalizeIcon($icon) ?? $this->resolveDefaultMoreIcon();
+        $this->hasExplicitIcon = $icon !== null;
 
         return $this;
     }
@@ -88,6 +112,7 @@ final class ActionOverflow
     public function color(string $color = 'gray'): self
     {
         $this->color = $color;
+        $this->hasExplicitColor = true;
 
         return $this;
     }
@@ -121,13 +146,67 @@ final class ActionOverflow
     }
 
     /**
+     * Joins the main action and its menu into one control: a split button,
+     * for one action and its variants. It has exactly one main action,
+     * whatever `primary_count` the config sets (`toActions()` refuses a
+     * `primaryCount()` other than 1): other buttons stand beside it. The
+     * menu's trigger becomes an icon-only chevron in the main button's colour
+     * (unless `icon()` or `color()` say otherwise), and a single leftover
+     * action stays in the menu instead of becoming a second button. With
+     * nothing left over there is only the main button.
+     */
+    public function split(bool $state = true): self
+    {
+        $this->split = $state;
+
+        return $this;
+    }
+
+    /**
+     * Which way the menu opens: Filament's `dropdownPlacement()`, passed to
+     * the menu as is (`'bottom-start'`, `'bottom-end'`, `'top-end'`…). Unset,
+     * the More menu keeps Filament's default for where it sits, and a split
+     * button's menu opens below it along its outer edge.
+     */
+    public function dropdownPlacement(?string $placement): self
+    {
+        $this->dropdownPlacement = $placement;
+
+        return $this;
+    }
+
+    /**
+     * The Livewire component the actions belong to, usually the page
+     * (`$this` in `getHeaderActions()`). Every action, and every action in a
+     * divider, is attached to it before its visibility is read, so a
+     * `visible()` or `hidden()` closure that reads `$livewire` or `$record`
+     * gets them: Filament attaches a page's actions only after the page has
+     * handed them over.
+     */
+    public function livewire(Component $livewire): self
+    {
+        $this->livewire = $livewire;
+
+        return $this;
+    }
+
+    /**
      * @return array<mixed>
      */
     public function toActions(): array
     {
+        if ($this->split && $this->hasExplicitPrimaryCount && $this->primaryCount !== 1) {
+            throw new InvalidArgumentException('A split button has one main action. Put the other buttons beside it.');
+        }
+
+        $this->attachLivewire($this->actions);
+
         $availableActions = $this->filterAvailableActions($this->actions);
 
-        [$primary, $overflow] = $this->partitionPrimaryAndOverflow($availableActions);
+        [$primary, $overflow] = $this->partitionPrimaryAndOverflow(
+            $availableActions,
+            $this->split ? 1 : $this->primaryCount,
+        );
 
         $primary = array_map($this->promoteToButton(...), $primary);
 
@@ -151,6 +230,10 @@ final class ActionOverflow
 
         if ($overflowActionCount === 0) {
             return $primary;
+        }
+
+        if ($this->split) {
+            return [$this->makeSplitGroup($primary[0], $overflow)];
         }
 
         if ($overflowActionCount === 1) {
@@ -188,6 +271,32 @@ final class ActionOverflow
         }
 
         return $action;
+    }
+
+    /**
+     * Attaches every action, and every action in a divider, to the component
+     * given to `livewire()`. Attached directly, an action keeps it when the
+     * steps below regroup it into a new divider or the More menu.
+     *
+     * @param  array<mixed>  $actions
+     */
+    private function attachLivewire(array $actions): void
+    {
+        if ($this->livewire === null) {
+            return;
+        }
+
+        foreach ($actions as $action) {
+            if (! is_object($action) || ! method_exists($action, 'livewire')) {
+                continue;
+            }
+
+            $action->livewire($this->livewire);
+
+            if ($action instanceof ActionGroup && $this->isDivider($action)) {
+                $this->attachLivewire($action->getActions());
+            }
+        }
     }
 
     /**
@@ -279,23 +388,23 @@ final class ActionOverflow
 
     /**
      * Walks the filtered list left to right, collecting items as primary
-     * until `primaryCount` real actions have been taken. When a divider
+     * until `$primaryCount` real actions have been taken. When a divider
      * (ActionGroup with dropdown(false)) is encountered while still filling
-     * primary slots, its available children are extracted toward primaryCount;
+     * primary slots, its available children are extracted toward the count;
      * any remaining children form a reconstructed divider in overflow.
      * Everything after the primary slice is full goes to overflow unchanged.
      *
      * @param  array<mixed>  $available
      * @return array{0: array<mixed>, 1: array<mixed>}
      */
-    private function partitionPrimaryAndOverflow(array $available): array
+    private function partitionPrimaryAndOverflow(array $available, int $primaryCount): array
     {
         $primary = [];
         $overflow = [];
         $primaryTaken = 0;
 
         foreach ($available as $item) {
-            if ($primaryTaken >= $this->primaryCount) {
+            if ($primaryTaken >= $primaryCount) {
                 $overflow[] = $item;
 
                 continue;
@@ -315,7 +424,7 @@ final class ActionOverflow
                     continue;
                 }
 
-                if ($primaryTaken < $this->primaryCount) {
+                if ($primaryTaken < $primaryCount) {
                     $primary[] = $child;
                     $primaryTaken++;
                 } else {
@@ -380,7 +489,7 @@ final class ActionOverflow
     private function makeMoreGroup(array $overflow): ActionGroup
     {
         $group = ActionGroup::make($overflow)
-            ->label($this->label)
+            ->label($this->resolveLabel())
             ->color($this->color);
 
         if ($this->button) {
@@ -396,12 +505,103 @@ final class ActionOverflow
             $group->hiddenLabel();
         }
 
+        if ($this->dropdownPlacement !== null && FilamentCompatibility::supportsDropdownPlacement($group)) {
+            $group->dropdownPlacement($this->dropdownPlacement);
+        }
+
         return $group;
+    }
+
+    /**
+     * The split button: the main action and the menu side by side in
+     * Filament's button group, the menu's trigger joined to the main button
+     * by the package's stylesheet (`fi-ao-split-menu`).
+     *
+     * @param  array<mixed>  $overflow
+     */
+    private function makeSplitGroup(mixed $main, array $overflow): ActionGroup
+    {
+        $more = $this->makeMoreGroup($overflow)->button();
+
+        $more->icon($this->hasExplicitIcon ? $this->icon : FilamentCompatibility::defaultSplitIcon())
+            ->color($this->hasExplicitColor ? $this->color : $this->colorOf($main))
+            ->tooltip($this->resolveLabel());
+
+        if (FilamentCompatibility::supportsHiddenLabel($more)) {
+            $more->hiddenLabel();
+        }
+
+        if (FilamentCompatibility::supportsExtraDropdownAttributes($more)) {
+            $more->extraDropdownAttributes(['class' => 'fi-ao-split-menu'], merge: true);
+        }
+
+        $group = ActionGroup::make($this->placeOverflow([$main], $more))->buttonGroup();
+
+        // Inside a group Filament opens a dropdown to the side, as a submenu;
+        // a split button's menu drops below, along its outer edge. Set once
+        // the group is made: Filament 4.0 sets a nested group's placement
+        // itself as the group is made, over the one it was given.
+        if (FilamentCompatibility::supportsDropdownPlacement($more)) {
+            $more->dropdownPlacement($this->dropdownPlacement ?? ($this->morePosition === MorePosition::Start ? 'bottom-start' : 'bottom-end'));
+        }
+
+        return $group;
+    }
+
+    /**
+     * The colour the main button is drawn in: its own, or Filament's
+     * default for a button, primary.
+     */
+    private function colorOf(mixed $action): string
+    {
+        $color = is_object($action) && method_exists($action, 'getColor') ? $action->getColor() : null;
+
+        return is_string($color) ? $color : 'primary';
     }
 
     private function resolveDefaultMoreIcon(): string
     {
         return FilamentCompatibility::defaultMoreIcon();
+    }
+
+    /**
+     * The More label: the one given, or "More" in the app's language, read
+     * as the list is composed.
+     */
+    private function resolveLabel(): string
+    {
+        if ($this->label !== null) {
+            return $this->label;
+        }
+
+        $label = self::stringOr(__(self::DEFAULT_LABEL_KEY), self::DEFAULT_LABEL);
+
+        // Without the package's translations loaded, the translator answers the key.
+        return $label === self::DEFAULT_LABEL_KEY ? self::DEFAULT_LABEL : $label;
+    }
+
+    /**
+     * The config's label. Unset, or the English default that older published
+     * config files carry, it is the translated default (`null`). Any other
+     * string goes through the translator, from the app's own lang files: a
+     * config file can't call `__()` itself.
+     */
+    private static function normalizeLabel(mixed $label): ?string
+    {
+        if ((! is_string($label)) || ($label === '') || ($label === self::DEFAULT_LABEL)) {
+            return null;
+        }
+
+        return self::stringOr(__($label), $label);
+    }
+
+    /**
+     * The translator's answer when it is a line: for a key that names a whole
+     * lang file it answers an array.
+     */
+    private static function stringOr(mixed $line, string $fallback): string
+    {
+        return is_string($line) ? $line : $fallback;
     }
 
     private static function normalizeIcon(mixed $icon): ?string
