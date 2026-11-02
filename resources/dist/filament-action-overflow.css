@@ -1,17 +1,41 @@
 /*
  * filament-action-overflow: the split button (ActionOverflow::split()).
  *
- * Filament's button group (.fi-btn-group) joins plain buttons only. The More
- * menu's button sits one level down, inside its dropdown
- * (.fi-dropdown.fi-ao-split-menu > .fi-dropdown-trigger > .fi-btn). These
- * rules square the corners where the main button and the menu's button meet,
- * draw a thin divider in the button's own text colour (so it suits any colour,
- * and dark mode), and narrow the menu's button to its chevron. Logical
- * properties keep it right in right-to-left layouts.
+ * A split button is Filament's button group (.fi-btn-group): the main button
+ * and the menu's dropdown. Filament draws one outline round the group, takes
+ * the ring off the group's own buttons and puts a 1px divider between them.
+ * The menu's button sits one level down, inside its dropdown
+ * (.fi-dropdown.fi-ao-split-menu > .fi-dropdown-trigger > .fi-btn), out of
+ * reach of those rules, so these do the same for it:
+ *
+ * - the corners square where the two buttons meet;
+ * - its own ring and shadow go, so the group's outline is the only one
+ *   (keyboard focus keeps its ring);
+ * - one 1px divider, in the colours of Filament's own button group;
+ * - it narrows to its chevron.
+ *
+ * An outlined coloured button keeps its coloured ring, as in Filament's own
+ * group. There the main button's ring is the divider, and the menu's ring is
+ * cut back on that side, so the joint is one line too.
+ *
+ * Logical properties keep it right in right-to-left layouts.
  */
+
+.fi-btn-group:has(> .fi-dropdown.fi-ao-split-menu) {
+    --fi-ao-split-divider: var(--color-gray-200);
+}
+
+.dark .fi-btn-group:has(> .fi-dropdown.fi-ao-split-menu) {
+    --fi-ao-split-divider: rgb(255 255 255 / 0.2);
+}
 
 .fi-btn-group > .fi-dropdown.fi-ao-split-menu > .fi-dropdown-trigger > .fi-btn {
     padding-inline: 0.5rem;
+}
+
+/* No outline of its own: the group draws it. */
+.fi-btn-group > .fi-dropdown.fi-ao-split-menu > .fi-dropdown-trigger > .fi-btn:not(.fi-outlined.fi-color):not(:focus-visible) {
+    box-shadow: none;
 }
 
 /* The menu after the main button (morePosition end, the default). */
@@ -23,7 +47,7 @@
 .fi-btn-group > .fi-dropdown.fi-ao-split-menu:last-child > .fi-dropdown-trigger > .fi-btn {
     border-start-start-radius: 0;
     border-end-start-radius: 0;
-    border-inline-start: 1px solid color-mix(in oklab, currentColor 25%, transparent);
+    border-inline-start: 1px solid var(--fi-ao-split-divider);
 }
 
 /* The menu before the main button (morePosition start). */
@@ -35,5 +59,30 @@
 .fi-btn-group > .fi-dropdown.fi-ao-split-menu:first-child > .fi-dropdown-trigger > .fi-btn {
     border-start-end-radius: 0;
     border-end-end-radius: 0;
-    border-inline-end: 1px solid color-mix(in oklab, currentColor 25%, transparent);
+    border-inline-end: 1px solid var(--fi-ao-split-divider);
+}
+
+/*
+ * Outlined in a colour: the two coloured rings meet at the joint. The main
+ * button's ring is the divider; the menu's is cut back on that side (its
+ * other three sides keep it, and room for the focus ring).
+ */
+.fi-btn-group > .fi-dropdown.fi-ao-split-menu > .fi-dropdown-trigger > .fi-btn.fi-outlined.fi-color {
+    border-inline-width: 0;
+}
+
+.fi-btn-group > .fi-dropdown.fi-ao-split-menu:last-child > .fi-dropdown-trigger > .fi-btn.fi-outlined.fi-color {
+    clip-path: inset(-3px -3px -3px 0);
+}
+
+.fi-btn-group > .fi-dropdown.fi-ao-split-menu:first-child > .fi-dropdown-trigger > .fi-btn.fi-outlined.fi-color {
+    clip-path: inset(-3px 0 -3px -3px);
+}
+
+.fi-btn-group > .fi-dropdown.fi-ao-split-menu:last-child > .fi-dropdown-trigger > .fi-btn.fi-outlined.fi-color:dir(rtl) {
+    clip-path: inset(-3px 0 -3px -3px);
+}
+
+.fi-btn-group > .fi-dropdown.fi-ao-split-menu:first-child > .fi-dropdown-trigger > .fi-btn.fi-outlined.fi-color:dir(rtl) {
+    clip-path: inset(-3px -3px -3px 0);
 }

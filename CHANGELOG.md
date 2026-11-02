@@ -2,6 +2,12 @@
 
 All notable changes to `filament-action-overflow` will be documented in this file.
 
+## 1.2.1 - 2026-11-02
+
+### Fixed
+- The split button's outline. The menu's button drew its own ring over the group's and added a line of its own at the joint, so its half looked heavier than the main button's and the divider was doubled. The group now draws the one outline and a single 1px divider, in the colours of Filament's own button group, in both positions and right to left. Keyboard focus keeps the menu button's ring. Outlined buttons in a colour keep their coloured ring, the main button's being the divider.
+- The menu's button takes the main button's size and outline (`size()`, `outlined()`), as it already took its colour. A small or outlined main action had a default-size, filled chevron beside it.
+
 ## 1.2.0 - 2026-11-02
 
 ### Added
