@@ -31,4 +31,13 @@ final class FilamentCompatibility
     {
         return method_exists($component, 'dropdownPlacement');
     }
+
+    /**
+     * Filament 4.0 has none: a group made inside another is given the
+     * placement `right-top` outright, over any it had.
+     */
+    public static function supportsDefaultDropdownPlacement(object $component): bool
+    {
+        return method_exists($component, 'defaultDropdownPlacement');
+    }
 }

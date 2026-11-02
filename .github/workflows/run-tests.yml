@@ -17,8 +17,15 @@ jobs:
       fail-fast: false
       matrix:
         php: ['8.2', '8.3', '8.4']
+        filament: ['^5.0']
+        include:
+          # Filament 4 too: the latest, and 4.0, which differs in places.
+          - php: '8.4'
+            filament: '^4.0'
+          - php: '8.2'
+            filament: '4.0.*'
 
-    name: PHP ${{ matrix.php }}
+    name: PHP ${{ matrix.php }}${{ matrix.filament != '^5.0' && format(' · Filament {0}', matrix.filament) || '' }}
 
     steps:
       - name: Checkout code
@@ -30,6 +37,9 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: dom, curl, libxml, mbstring, zip
           coverage: none
+
+      - name: Use Filament ${{ matrix.filament }}
+        run: composer require "filament/filament:${{ matrix.filament }}" --no-interaction --no-update
 
       - name: Install dependencies
         uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0

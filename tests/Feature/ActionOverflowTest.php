@@ -7,6 +7,8 @@ use Filament\Support\Facades\FilamentAsset;
 use Filament\Support\Icons\Heroicon;
 use Harvirsidhu\FilamentActionOverflow\ActionOverflow;
 use Harvirsidhu\FilamentActionOverflow\Enums\MorePosition;
+use Illuminate\Database\Eloquent\Model;
+use Livewire\Component;
 
 enum FakeMoreIcon: string
 {
@@ -286,6 +288,30 @@ it('can filter unauthorized actions when enabled', function (): void {
 
     expect($composed)->toHaveCount(1)
         ->and($composed[0])->toBe($view);
+});
+
+it('attaches the actions to the page before reading their visibility', function (): void {
+    $page = new class extends Component {};
+    $publish = Action::make('publish')->visible(fn ($livewire): bool => $livewire !== null);
+
+    $withoutPage = ActionOverflow::make([Action::make('edit'), $publish])->toActions();
+    $withPage = ActionOverflow::make([Action::make('edit'), $publish])->livewire($page)->toActions();
+
+    expect($withoutPage)->toHaveCount(1)
+        ->and($withPage)->toHaveCount(2)
+        ->and($withPage[1])->toBe($publish)
+        ->and($publish->getLivewire())->toBe($page);
+});
+
+it('attaches divider children to the page so they keep their place', function (): void {
+    $page = new class extends Component {};
+    $publish = Action::make('publish')->visible(fn ($livewire): bool => $livewire !== null);
+
+    $composed = ActionOverflow::make([
+        makeDividerGroup([$publish, Action::make('archive'), Action::make('delete')]),
+    ])->livewire($page)->toActions();
+
+    expect($composed[0])->toBe($publish);
 });
 
 it('preserves a divider between actions inside the overflow group', function (): void {
@@ -716,10 +742,64 @@ it('withOverflow macro supports dividers from nested dropdown(false) groups', fu
     expect($overflowItems[3]->getName())->toBe('download');
 });
 
-/**
- * @param  array<string>  $names
- * @return array<Action>
- */
+it('withOverflow macro uses the configured primary count when given none', function (): void {
+    config()->set('action-overflow.primary_count', 2);
+
+    $composed = ActionGroup::make(makeActions(['edit', 'archive', 'publish', 'delete']))->withOverflow();
+
+    expect($composed)->toHaveCount(3)
+        ->and($composed[0]->getName())->toBe('edit')
+        ->and($composed[1]->getName())->toBe('archive')
+        ->and($composed[2])->toBeInstanceOf(ActionGroup::class);
+});
+
+it('withOverflow macro leaves each action its own view', function (): void {
+    config()->set('action-overflow.button', false);
+
+    $composed = ActionGroup::make(makeActions(['edit', 'archive']))->withOverflow();
+    $ownView = Action::make('reference')->getView();
+
+    expect($composed[0]->getView())->toBe($ownView)
+        ->and($composed[1]->getView())->toBe($ownView);
+});
+
+it('withOverflow macro leaves a nested group out front to open where Filament puts it', function (): void {
+    $export = ActionGroup::make(makeActions(['csv', 'pdf']))->label('Export');
+
+    $composed = ActionGroup::make([$export, ...makeActions(['edit', 'delete'])])->withOverflow();
+
+    expect($composed[0])->toBe($export)
+        ->and($export->getDropdownPlacement())->toBeNull()
+        ->and($export->getGroup())->toBeNull();
+});
+
+it('withOverflow and withSplit macros hide every action of a hidden group', function (): void {
+    expect(ActionGroup::make(makeActions(['edit', 'archive', 'delete']))->hidden()->withOverflow())->toBe([])
+        ->and(ActionGroup::make(makeActions(['callNext', 'counterOne']))->visible(false)->withSplit())->toBe([]);
+});
+
+it('withOverflow macro hides nothing when the group\'s condition cannot be read yet', function (): void {
+    $composed = ActionGroup::make(makeActions(['edit', 'archive']))
+        ->visible(fn (Model $record): bool => false)
+        ->withOverflow();
+
+    expect($composed)->toHaveCount(2);
+});
+
+it('withOverflow macro passes on the livewire() set on the group', function (): void {
+    $page = new class extends Component {};
+
+    $composed = ActionGroup::make([
+        makeDividerGroup([
+            Action::make('publish')->visible(fn ($livewire): bool => $livewire !== null),
+            Action::make('archive'),
+            Action::make('delete'),
+        ]),
+    ])->livewire($page)->withOverflow();
+
+    expect($composed[0]->getName())->toBe('publish');
+});
+
 it('joins the primary action and the menu into one button group when split', function (): void {
     $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
 
@@ -856,6 +936,19 @@ it('refuses a split button with two main actions whatever the call order', funct
         ->toActions();
 })->throws(InvalidArgumentException::class, 'A split button has one main action.');
 
+it('keeps one main action in a split button whatever the configured primary count', function (): void {
+    config()->set('action-overflow.primary_count', 2);
+
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    $parts = ActionOverflow::make($actions)->split()->toActions()[0]->getActions();
+    $viaMacro = ActionGroup::make(makeActions(['callNext', 'counterOne', 'counterTwo']))->withSplit()[0]->getActions();
+
+    expect($parts[0])->toBe($actions[0])
+        ->and($parts[1]->getActions())->toBe([$actions[1], $actions[2]])
+        ->and($viaMacro[0]->getName())->toBe('callNext');
+});
+
 it('makes the next available action the main one when the first is hidden', function (): void {
     $actions = [
         Action::make('callNext')->hidden(),
@@ -924,6 +1017,10 @@ it('registers the split button stylesheet', function (): void {
     expect($ids)->toContain('filament-action-overflow');
 });
 
+/**
+ * @param  array<string>  $names
+ * @return array<Action>
+ */
 function makeActions(array $names): array
 {
     return array_map(static fn (string $name): Action => Action::make($name), $names);

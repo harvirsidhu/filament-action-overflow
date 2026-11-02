@@ -28,7 +28,7 @@ Works **anywhere Filament accepts an action array** — page headers, table acti
 - [Requirements](#requirements)
 - [Installation](#installation)
 - [Quick start (30 seconds)](#quick-start-30-seconds)
-- [The two ways to use it](#the-two-ways-to-use-it)
+- [Three ways to use it](#three-ways-to-use-it)
 - [How it decides what overflows](#how-it-decides-what-overflows) — the mental model
 - [More or split?](#more-or-split)
 - [Recipes](#recipes)
@@ -39,6 +39,7 @@ Works **anywhere Filament accepts an action array** — page headers, table acti
   - [Which way the menu opens](#which-way-the-menu-opens)
   - [Sections inside the menu (dividers)](#sections-inside-the-menu-dividers)
   - [Hidden, invisible & unauthorized actions](#hidden-invisible--unauthorized-actions)
+  - [Visibility that depends on the page or the record](#visibility-that-depends-on-the-page-or-the-record)
   - [Button vs. link appearance](#button-vs-link-appearance)
   - [Set defaults globally](#set-defaults-globally)
 - [API reference](#api-reference)
@@ -77,6 +78,8 @@ composer require harvirsidhu/filament-action-overflow
 
 That's it — the package auto-registers and works with zero configuration.
 
+A [split button](#a-split-button) also uses a small stylesheet, published with your other Filament assets by `php artisan filament:assets`. Filament's own installation adds `php artisan filament:upgrade`, which runs it, to Composer's `post-autoload-dump`, so most apps already do this on every `composer install`. Without it, a split button's two halves show as two separate buttons.
+
 Only publish the config if you want to change the defaults globally:
 
 ```bash
@@ -109,30 +112,31 @@ public function getHeaderActions(): array
             └─ Delete
 ```
 
-`withOverflow(int $primary = 1)` is **terminal**: it returns the finished `array<Action|ActionGroup>`, ready to hand straight back from `getHeaderActions()`, `getTableActions()`, `getRecordActions()`, `getBulkActions()`, and so on.
+`withOverflow(?int $primary = null)` is **terminal**: it returns the finished `array<Action|ActionGroup>`, ready to return from a page's `getHeaderActions()`, or to pass to a table's `recordActions()`, `headerActions()` or `toolbarActions()`. Without a count it keeps the configured one: `1` unless you [changed it](#set-defaults-globally).
 
 > By default, the primary actions **and** the **More** trigger are rendered as buttons, so you get a row of matching buttons without sprinkling `->button()` everywhere.
 
 ---
 
-## The two ways to use it
+## Three ways to use it
 
-There are exactly two entry points. Pick based on whether you need to customize the **More** button.
+Two macros for the common cases, and the builder underneath them for everything else.
 
-| | `->withOverflow()` macro | `ActionOverflow` facade |
-| --- | --- | --- |
-| **Best for** | The common case | When you need control |
-| **Syntax** | Chains onto an existing `ActionGroup` | Standalone builder |
-| **Customizes label / icon / color / position?** | No (only the primary count) | Yes, full fluent API |
-| **Returns** | `array` (terminal) | `array` via `->toActions()` (terminal) |
+| | `->withOverflow()` macro | `->withSplit()` macro | `ActionOverflow` builder |
+| --- | --- | --- | --- |
+| **Best for** | The common case | A [split button](#a-split-button) | When you need control |
+| **Syntax** | Chains onto an `ActionGroup` | Chains onto an `ActionGroup` | Standalone builder |
+| **Customizes label / icon / color / position?** | No (only the primary count) | No | Yes, full fluent API |
+| **Returns** | `array` (terminal) | `array` (terminal) | `array` via `->toActions()` (terminal) |
 
-**Macro** — shortest path:
+**Macros** — shortest path:
 
 ```php
 ActionGroup::make([...])->withOverflow(2);
+ActionGroup::make([...])->withSplit();
 ```
 
-**Facade** — when you want to change the trigger or behavior:
+**Builder** — when you want to change the trigger or behavior:
 
 ```php
 use Filament\Actions\Action;
@@ -150,7 +154,7 @@ return ActionOverflow::make([
     ->toActions();
 ```
 
-Both produce the same kind of output — the macro is just sugar over the facade with `primaryCount` set.
+All three produce the same kind of output. The macros are sugar over the builder: `withOverflow(2)` is `ActionOverflow::make($actions)->primaryCount(2)->toActions()`, and `withSplit()` is `ActionOverflow::make($actions)->split()->toActions()`. The builder's `make()` is on the facade above (also aliased as `ActionOverflow`) and on the class `Harvirsidhu\FilamentActionOverflow\ActionOverflow` itself.
 
 ---
 
@@ -207,14 +211,14 @@ ActionGroup::make([$callNext, $toCounterOne, $toCounterTwo])->withSplit();
 
 ```php
 ActionGroup::make([...])->withOverflow(2);          // macro
-ActionOverflow::make([...])->primaryCount(2)->toActions(); // facade
+ActionOverflow::make([...])->primaryCount(2)->toActions(); // builder
 ```
 
 `primaryCount(0)` is valid and pushes **everything** into **More**. Negative values throw an `InvalidArgumentException`.
 
 ### Style the More trigger
 
-Only available via the facade (the macro intentionally keeps its surface tiny):
+Only available on the builder (the macros intentionally keep their surface tiny):
 
 ```php
 use Filament\Support\Enums\IconPosition;
@@ -230,7 +234,7 @@ ActionOverflow::make($actions)
 ```
 
 - **`icon()`** accepts a plain string (`'heroicon-m-bars-3'`), a backed enum, or a Filament icon enum like `Heroicon::EllipsisVertical`.
-- **`hiddenLabel()`** is honored only on Filament versions that support hidden labels; on older versions it's silently ignored rather than crashing.
+- **`hiddenLabel()`** draws an icon-only trigger. The label stays as its name for screen readers, so keep it meaningful.
 
 ### Put More on the left (and RTL)
 
@@ -274,9 +278,10 @@ ActionOverflow::make([
 
 In split mode:
 
-- The menu's trigger is an icon-only chevron in the main button's colour. `icon()` and `color()` still win when you set them, and the label becomes its tooltip.
+- The menu's trigger is an icon-only chevron in the main button's colour. `icon()` and `color()` still win when you set them on the builder; the config's `icon` and `color` style the **More** button only.
+- `label()` names the menu: it is the chevron's tooltip and what a screen reader announces, so say what the choices are (`->label('Calling to')`) rather than leaving it at **More**.
 - A single leftover action stays in the menu: a split button with one choice is still a split button. With nothing left over there is only the main button.
-- It has **one main action**. `toActions()` throws an `InvalidArgumentException` for any `primaryCount()` other than `1`: with two main buttons nobody can tell which one the menu belongs to. Put other buttons beside it.
+- It has **one main action**, whatever `primary_count` the config sets. `toActions()` throws an `InvalidArgumentException` if you ask for any other `primaryCount()`: with two main buttons nobody can tell which one the menu belongs to. Put other buttons beside it.
 - If the main action is hidden, the next available one becomes the main, because list order is priority order.
 - `morePosition(MorePosition::Start)` puts the menu on the leading side.
 - The menu opens below the button along its outer edge; [`dropdownPlacement()`](#which-way-the-menu-opens) changes that.
@@ -370,6 +375,33 @@ ActionOverflow::make($actions)
     ->toActions();
 ```
 
+### Visibility that depends on the page or the record
+
+The package reads each action's visibility when it composes the list. Inside `getHeaderActions()` that is before Filament attaches the actions to the page, so a `visible()` or `hidden()` closure that reads `$livewire` or `$record` would get `null`. Give the builder the page with `livewire()`, or set it on the group before a macro:
+
+```php
+public function getHeaderActions(): array
+{
+    return ActionOverflow::make([
+        Action::make('publish')->visible(fn (Post $record): bool => $record->isDraft()),
+        Action::make('edit'),
+        Action::make('delete'),
+    ])
+        ->livewire($this)
+        ->toActions();
+
+    // or: ActionGroup::make([...])->livewire($this)->withOverflow();
+}
+```
+
+Every action, and every action inside a divider, is attached to the page first, so on a record's page `$record` is that record, as it is when Filament draws the action.
+
+A table is different. `recordActions()` is composed once for the whole table, before any row, so which actions sit out front can't change from row to row. Filament still hides an action in a row where it isn't visible. Just make sure a closure that reads `$record` doesn't hide the action when there is no row yet, or it disappears from every row:
+
+```php
+Action::make('publish')->visible(fn (?Post $record): bool => $record?->isDraft() ?? true)
+```
+
 ### Button vs. link appearance
 
 By default, primary actions and the **More** trigger are promoted to **button** view so the row looks uniform. To leave each action's own render style untouched, opt out:
@@ -380,9 +412,11 @@ ActionOverflow::make($actions)->button(false)->toActions();
 
 `button(false)` is **opt-out only** — it stops the composer from *adding* `->button()`. An action you already styled with `->button()` keeps its button view regardless.
 
+A split button's two halves are buttons either way: Filament's button group draws its actions as buttons unless an action says otherwise.
+
 ### Set defaults globally
 
-Prefer to configure once instead of per-call? Publish the config and edit the defaults — every `withOverflow()` / `ActionOverflow::make()` call inherits them (and per-call methods still override per call):
+Prefer to configure once instead of per-call? Publish the config and edit the defaults — every `withOverflow()`, `withSplit()` and `ActionOverflow::make()` call inherits them (and per-call methods, or a count passed to `withOverflow()`, still override them):
 
 ```php
 // config/action-overflow.php
@@ -402,10 +436,10 @@ return [
 ### `ActionGroup::withOverflow()` macro
 
 ```php
-ActionGroup::make(array $actions)->withOverflow(int $primary = 1): array
+ActionGroup::make(array $actions)->withOverflow(?int $primary = null): array
 ```
 
-Terminal. Composes the group's actions with the given primary count, using config defaults for everything else. Returns the finished action array.
+Terminal. Composes the group's actions with the given primary count (the configured `primary_count` when you pass none), using config defaults for everything else. Returns the finished action array. The actions come out as if you had listed them directly: the group is only their carrier. A `livewire()` set on the group is passed on, and a group hidden by its own `hidden()` / `visible()` returns `[]`.
 
 ### `ActionGroup::withSplit()` macro
 
@@ -413,7 +447,7 @@ Terminal. Composes the group's actions with the given primary count, using confi
 ActionGroup::make(array $actions)->withSplit(): array
 ```
 
-Terminal. The [split button](#a-split-button) in one line: the group's first available action is the button, the rest are its menu. The same as `ActionOverflow::make($actions)->split()->toActions()`.
+Terminal. The [split button](#a-split-button) in one line: the group's first available action is the button, the rest are its menu. The same as `ActionOverflow::make($actions)->split()->toActions()`, and it treats the group as `withOverflow()` does.
 
 ### `ActionOverflow` fluent API
 
@@ -431,7 +465,8 @@ Every method returns `$this` for chaining; `toActions()` ends the chain and retu
 | `button(bool $state = true)` | `true` | Promote primary actions + trigger to button view. `false` opts out. |
 | `morePosition(MorePosition\|string $position)` | `End` | Place the **More** control at the `Start` or `End` of the row. |
 | `filterUnauthorized(bool $state = true)` | `false` | Drop unauthorized actions before composing. |
-| `split(bool $state = true)` | `false` | Join the main action and its menu into one control: a [split button](#a-split-button). Exactly one main action. |
+| `livewire(Component $livewire)` | — | Attach every action to the page (or another Livewire component) before visibility is read, so closures that read `$livewire` or `$record` get them. See [Visibility that depends on the page or the record](#visibility-that-depends-on-the-page-or-the-record). |
+| `split(bool $state = true)` | `false` | Join the main action and its menu into one control: a [split button](#a-split-button). Exactly one main action, whatever the configured `primary_count`. |
 | `dropdownPlacement(?string $placement)` | Filament's | Which way the menu opens: `'bottom-start'`, `'bottom-end'`, `'top-end'`… See [Which way the menu opens](#which-way-the-menu-opens). |
 | `toActions()` | — | **Terminal.** Returns `array<Action\|ActionGroup>`. |
 
@@ -466,7 +501,7 @@ Every method returns `$this` for chaining; `toActions()` ends the chain and retu
 
 For the curious, `toActions()` runs a fixed five-stage pipeline:
 
-1. **Filter** — remove hidden / invisible / (opt-in) unauthorized actions, recursing one level into divider groups and dropping any divider left empty.
+1. **Filter** — attach the actions to the page if `livewire()` was given, then remove hidden / invisible / (opt-in) unauthorized actions, recursing one level into divider groups and dropping any divider left empty.
 2. **Partition** — walk left-to-right, taking `primaryCount` *real* actions into primary; a divider contributes its children toward that count and re-wraps any leftovers as a divider in overflow.
 3. **Promote** — if `button` is on, call `->button()` on the primary actions.
 4. **Sanitize** — unwrap a *leading* divider in the overflow so there's no orphan separator at the top of the menu.
@@ -488,10 +523,10 @@ Same rule — when exactly one action overflows, it's surfaced inline rather tha
 No. Use `morePosition(MorePosition::Start)` for "leading side"; it flips automatically with the layout direction. See [Put More on the left](#put-more-on-the-left-and-rtl).
 
 **Can I use it outside page headers?**
-Yes — the output is just an action array, valid anywhere Filament accepts one (tables, records, bulk actions, widgets).
+Yes — the output is just an action array, valid anywhere Filament accepts one: a table's `recordActions()`, `headerActions()` or `toolbarActions()`, a schema's actions, a widget. In a table, read [the note on row visibility](#visibility-that-depends-on-the-page-or-the-record).
 
 **An action's visibility depends on the record — is that respected?**
-Yes. Filtering calls the same `isHidden()` / `isVisible()` / `isAuthorized()` your action defines, so record-aware closures are honored.
+On a page, yes, once the builder has the page: `->livewire($this)`, or `ActionGroup::make([...])->livewire($this)` before a macro. Filtering calls the same `isHidden()` / `isVisible()` / `isAuthorized()` your action defines, and without the page a closure that reads `$record` gets `null`. In a table the list is composed once, before any row, so it can't differ from row to row. See [Visibility that depends on the page or the record](#visibility-that-depends-on-the-page-or-the-record).
 
 **My actions' visibility changes within one request (a list page's tabs, say). What happens?**
 Visibility is read once, when `toActions()` composes the list. Filament builds a page's header actions once a request, before an update such as a tab switch lands, so compose them again after it. On a list page with tabs, for example:

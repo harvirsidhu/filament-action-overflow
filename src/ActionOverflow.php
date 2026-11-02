@@ -12,10 +12,19 @@ use Filament\Support\Enums\IconSize;
 use Harvirsidhu\FilamentActionOverflow\Enums\MorePosition;
 use Harvirsidhu\FilamentActionOverflow\Support\FilamentCompatibility;
 use InvalidArgumentException;
+use Livewire\Component;
 use Throwable;
 
 final class ActionOverflow
 {
+    private bool $hasExplicitPrimaryCount = false;
+
+    private bool $hasExplicitIcon = false;
+
+    private bool $hasExplicitColor = false;
+
+    private ?Component $livewire = null;
+
     /**
      * @param  array<mixed>  $actions
      */
@@ -32,8 +41,6 @@ final class ActionOverflow
         private MorePosition $morePosition = MorePosition::End,
         private bool $split = false,
         private ?string $dropdownPlacement = null,
-        private bool $hasExplicitIcon = false,
-        private bool $hasExplicitColor = false,
     ) {
         $this->icon ??= $this->resolveDefaultMoreIcon();
     }
@@ -64,6 +71,7 @@ final class ActionOverflow
         }
 
         $this->primaryCount = $count;
+        $this->hasExplicitPrimaryCount = true;
 
         return $this;
     }
@@ -128,8 +136,9 @@ final class ActionOverflow
 
     /**
      * Joins the main action and its menu into one control: a split button,
-     * for one action and its variants. It has exactly one main action
-     * (`primaryCount(1)`, the default): other buttons stand beside it. The
+     * for one action and its variants. It has exactly one main action,
+     * whatever `primary_count` the config sets (`toActions()` refuses a
+     * `primaryCount()` other than 1): other buttons stand beside it. The
      * menu's trigger becomes an icon-only chevron in the main button's colour
      * (unless `icon()` or `color()` say otherwise), and a single leftover
      * action stays in the menu instead of becoming a second button. With
@@ -156,17 +165,37 @@ final class ActionOverflow
     }
 
     /**
+     * The Livewire component the actions belong to, usually the page
+     * (`$this` in `getHeaderActions()`). Every action, and every action in a
+     * divider, is attached to it before its visibility is read, so a
+     * `visible()` or `hidden()` closure that reads `$livewire` or `$record`
+     * gets them: Filament attaches a page's actions only after the page has
+     * handed them over.
+     */
+    public function livewire(Component $livewire): self
+    {
+        $this->livewire = $livewire;
+
+        return $this;
+    }
+
+    /**
      * @return array<mixed>
      */
     public function toActions(): array
     {
-        if ($this->split && $this->primaryCount !== 1) {
+        if ($this->split && $this->hasExplicitPrimaryCount && $this->primaryCount !== 1) {
             throw new InvalidArgumentException('A split button has one main action. Put the other buttons beside it.');
         }
 
+        $this->attachLivewire($this->actions);
+
         $availableActions = $this->filterAvailableActions($this->actions);
 
-        [$primary, $overflow] = $this->partitionPrimaryAndOverflow($availableActions);
+        [$primary, $overflow] = $this->partitionPrimaryAndOverflow(
+            $availableActions,
+            $this->split ? 1 : $this->primaryCount,
+        );
 
         $primary = array_map($this->promoteToButton(...), $primary);
 
@@ -231,6 +260,32 @@ final class ActionOverflow
         }
 
         return $action;
+    }
+
+    /**
+     * Attaches every action, and every action in a divider, to the component
+     * given to `livewire()`. Attached directly, an action keeps it when the
+     * steps below regroup it into a new divider or the More menu.
+     *
+     * @param  array<mixed>  $actions
+     */
+    private function attachLivewire(array $actions): void
+    {
+        if ($this->livewire === null) {
+            return;
+        }
+
+        foreach ($actions as $action) {
+            if (! is_object($action) || ! method_exists($action, 'livewire')) {
+                continue;
+            }
+
+            $action->livewire($this->livewire);
+
+            if ($action instanceof ActionGroup && $this->isDivider($action)) {
+                $this->attachLivewire($action->getActions());
+            }
+        }
     }
 
     /**
@@ -322,23 +377,23 @@ final class ActionOverflow
 
     /**
      * Walks the filtered list left to right, collecting items as primary
-     * until `primaryCount` real actions have been taken. When a divider
+     * until `$primaryCount` real actions have been taken. When a divider
      * (ActionGroup with dropdown(false)) is encountered while still filling
-     * primary slots, its available children are extracted toward primaryCount;
+     * primary slots, its available children are extracted toward the count;
      * any remaining children form a reconstructed divider in overflow.
      * Everything after the primary slice is full goes to overflow unchanged.
      *
      * @param  array<mixed>  $available
      * @return array{0: array<mixed>, 1: array<mixed>}
      */
-    private function partitionPrimaryAndOverflow(array $available): array
+    private function partitionPrimaryAndOverflow(array $available, int $primaryCount): array
     {
         $primary = [];
         $overflow = [];
         $primaryTaken = 0;
 
         foreach ($available as $item) {
-            if ($primaryTaken >= $this->primaryCount) {
+            if ($primaryTaken >= $primaryCount) {
                 $overflow[] = $item;
 
                 continue;
@@ -358,7 +413,7 @@ final class ActionOverflow
                     continue;
                 }
 
-                if ($primaryTaken < $this->primaryCount) {
+                if ($primaryTaken < $primaryCount) {
                     $primary[] = $child;
                     $primaryTaken++;
                 } else {
@@ -469,13 +524,17 @@ final class ActionOverflow
             $more->extraDropdownAttributes(['class' => 'fi-ao-split-menu'], merge: true);
         }
 
+        $group = ActionGroup::make($this->placeOverflow([$main], $more))->buttonGroup();
+
         // Inside a group Filament opens a dropdown to the side, as a submenu;
-        // a split button's menu drops below, along its outer edge.
-        if ($this->dropdownPlacement === null && FilamentCompatibility::supportsDropdownPlacement($more)) {
-            $more->dropdownPlacement($this->morePosition === MorePosition::Start ? 'bottom-start' : 'bottom-end');
+        // a split button's menu drops below, along its outer edge. Set once
+        // the group is made: Filament 4.0 sets a nested group's placement
+        // itself as the group is made, over the one it was given.
+        if (FilamentCompatibility::supportsDropdownPlacement($more)) {
+            $more->dropdownPlacement($this->dropdownPlacement ?? ($this->morePosition === MorePosition::Start ? 'bottom-start' : 'bottom-end'));
         }
 
-        return ActionGroup::make($this->placeOverflow([$main], $more))->buttonGroup();
+        return $group;
     }
 
     /**
