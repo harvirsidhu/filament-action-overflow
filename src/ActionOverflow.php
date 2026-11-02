@@ -527,6 +527,16 @@ final class ActionOverflow
             ->color($this->hasExplicitColor ? $this->color : $this->colorOf($main))
             ->tooltip($this->resolveLabel());
 
+        // One control: the menu's button is the main one's size, and
+        // outlined when it is.
+        if (is_object($main) && method_exists($main, 'getSize') && method_exists($more, 'size')) {
+            $more->size($main->getSize());
+        }
+
+        if (is_object($main) && method_exists($main, 'isOutlined') && method_exists($more, 'outlined')) {
+            $more->outlined($main->isOutlined());
+        }
+
         if (FilamentCompatibility::supportsHiddenLabel($more)) {
             $more->hiddenLabel();
         }

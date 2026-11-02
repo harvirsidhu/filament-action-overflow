@@ -294,7 +294,7 @@ ActionOverflow::make([
 
 In split mode:
 
-- The menu's trigger is an icon-only chevron in the main button's colour. `icon()` and `color()` still win when you set them on the builder; the config's `icon` and `color` style the **More** button only.
+- The menu's trigger is an icon-only chevron in the main button's colour and size, outlined when it is (`->outlined()`). `icon()` and `color()` still win when you set them on the builder; the config's `icon` and `color` style the **More** button only.
 - `label()` names the menu: it is the chevron's tooltip and what a screen reader announces, so say what the choices are (`->label(__('Calling to'))`) rather than leaving it at **More**.
 - A single leftover action stays in the menu: a split button with one choice is still a split button. With nothing left over there is only the main button.
 - It has **one main action**, whatever `primary_count` the config sets. `toActions()` throws an `InvalidArgumentException` if you ask for any other `primaryCount()`: with two main buttons nobody can tell which one the menu belongs to. Put other buttons beside it.
@@ -304,7 +304,7 @@ In split mode:
 
 `ActionGroup::make([...])->withSplit()` is the one-line form, like `withOverflow()`.
 
-The join is drawn by a small stylesheet the package registers with Filament (`resources/dist/filament-action-overflow.css`). It is published with your other Filament assets by `php artisan filament:assets`, which `php artisan filament:upgrade` runs.
+The join is drawn by a small stylesheet the package registers with Filament (`resources/dist/filament-action-overflow.css`): one outline round both halves and one divider between them, as Filament's own button group draws them, in light and dark mode and right to left. It is published with your other Filament assets by `php artisan filament:assets`, which `php artisan filament:upgrade` runs.
 
 ### Which way the menu opens
 

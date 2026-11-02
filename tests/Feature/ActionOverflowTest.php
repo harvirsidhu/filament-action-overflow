@@ -916,6 +916,26 @@ it('draws the split menu as an icon-only chevron in the main button colour', fun
         ->and($menu->isButton())->toBeTrue();
 });
 
+it('draws the split menu at the main button size and in its outline', function (): void {
+    $actions = [Action::make('callNext')->size('sm')->outlined(), ...makeActions(['counterOne', 'counterTwo'])];
+
+    /** @var ActionGroup $menu */
+    $menu = ActionOverflow::make($actions)->split()->toActions()[0]->getActions()[1];
+
+    expect(normalizeBackedEnumValue(getConfiguredValue($menu, ['size'], 'getSize')))->toBe('sm')
+        ->and(getConfiguredValue($menu, ['isOutlined'], 'isOutlined'))->toBeTrue();
+});
+
+it('leaves the split menu filled at the usual size when the main button is', function (): void {
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    /** @var ActionGroup $menu */
+    $menu = ActionOverflow::make($actions)->split()->toActions()[0]->getActions()[1];
+
+    expect(getConfiguredValue($menu, ['size'], 'getSize'))->toBeNull()
+        ->and(getConfiguredValue($menu, ['isOutlined'], 'isOutlined'))->toBeFalse();
+});
+
 it('colours the split menu primary when the main button has no colour of its own', function (): void {
     $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
 
