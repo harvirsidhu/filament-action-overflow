@@ -5,7 +5,9 @@ All notable changes to `filament-action-overflow` will be documented in this fil
 ## Unreleased
 
 ### Added
-- `ActionOverflow::split()` joins the primary actions and the **More** menu into one control: a split button. The menu's trigger becomes an icon-only chevron in the main button's colour (unless `icon()` or `color()` are set), a single leftover action stays in the menu, and `morePosition(MorePosition::Start)` puts the menu first. Configurable through the new `split` config key (default `false`).
+- `ActionOverflow::split()` joins the main action and its **More** menu into one control: a split button, for one action and its variants. It has exactly one main action (`toActions()` throws for any other `primaryCount()`). The menu's trigger becomes an icon-only chevron in the main button's colour (unless `icon()` or `color()` are set), a single leftover action stays in the menu, the menu opens below the button along its outer edge, and `morePosition(MorePosition::Start)` puts the menu first.
+- `ActionGroup::withSplit()`, the one-line form of a split button, like `withOverflow()`.
+- `ActionOverflow::dropdownPlacement()`, Filament's own placement (`'bottom-start'`, `'bottom-end'`, `'top-end'`…) for the menu, in both modes. Unset, the **More** menu keeps Filament's default for where it sits.
 - A small stylesheet, registered with Filament's asset manager, that joins the split button's two halves. It is published with the app's other Filament assets by `php artisan filament:assets`.
 
 ## 1.1.2 - 2026-07-21

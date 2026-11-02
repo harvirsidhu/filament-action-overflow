@@ -62,11 +62,14 @@ class FilamentActionOverflowServiceProvider extends PackageServiceProvider
             return;
         }
 
-        if (ActionGroup::hasMacro('withOverflow')) {
-            return;
+        if (! ActionGroup::hasMacro('withOverflow')) {
+            $macro = require __DIR__ . '/Macros/with_overflow_macro.php';
+            ActionGroup::macro('withOverflow', $macro);
         }
 
-        $macro = require __DIR__ . '/Macros/with_overflow_macro.php';
-        ActionGroup::macro('withOverflow', $macro);
+        if (! ActionGroup::hasMacro('withSplit')) {
+            $splitMacro = require __DIR__ . '/Macros/with_split_macro.php';
+            ActionGroup::macro('withSplit', $splitMacro);
+        }
     }
 }

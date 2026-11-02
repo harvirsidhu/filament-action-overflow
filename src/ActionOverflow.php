@@ -31,6 +31,7 @@ final class ActionOverflow
         private bool $filterUnauthorized = false,
         private MorePosition $morePosition = MorePosition::End,
         private bool $split = false,
+        private ?string $dropdownPlacement = null,
         private bool $hasExplicitIcon = false,
         private bool $hasExplicitColor = false,
     ) {
@@ -53,7 +54,6 @@ final class ActionOverflow
             iconPosition: self::normalizeIconPosition(config('action-overflow.icon_position', IconPosition::After)),
             filterUnauthorized: (bool) config('action-overflow.filter_unauthorized', false),
             morePosition: self::normalizeMorePosition(config('action-overflow.more_position', MorePosition::End)),
-            split: (bool) config('action-overflow.split', false),
         );
     }
 
@@ -127,11 +127,13 @@ final class ActionOverflow
     }
 
     /**
-     * Joins the primary actions and the More menu into one control: a split
-     * button. The menu's trigger becomes an icon-only chevron in the main
-     * button's colour (unless `icon()` or `color()` say otherwise), and a
-     * single leftover action stays in the menu instead of becoming a second
-     * button. With nothing left over there is only the main button.
+     * Joins the main action and its menu into one control: a split button,
+     * for one action and its variants. It has exactly one main action
+     * (`primaryCount(1)`, the default): other buttons stand beside it. The
+     * menu's trigger becomes an icon-only chevron in the main button's colour
+     * (unless `icon()` or `color()` say otherwise), and a single leftover
+     * action stays in the menu instead of becoming a second button. With
+     * nothing left over there is only the main button.
      */
     public function split(bool $state = true): self
     {
@@ -141,10 +143,27 @@ final class ActionOverflow
     }
 
     /**
+     * Which way the menu opens: Filament's `dropdownPlacement()`, passed to
+     * the menu as is (`'bottom-start'`, `'bottom-end'`, `'top-end'`…). Unset,
+     * the More menu keeps Filament's default for where it sits, and a split
+     * button's menu opens below it along its outer edge.
+     */
+    public function dropdownPlacement(?string $placement): self
+    {
+        $this->dropdownPlacement = $placement;
+
+        return $this;
+    }
+
+    /**
      * @return array<mixed>
      */
     public function toActions(): array
     {
+        if ($this->split && $this->primaryCount !== 1) {
+            throw new InvalidArgumentException('A split button has one main action. Put the other buttons beside it.');
+        }
+
         $availableActions = $this->filterAvailableActions($this->actions);
 
         [$primary, $overflow] = $this->partitionPrimaryAndOverflow($availableActions);
@@ -173,8 +192,8 @@ final class ActionOverflow
             return $primary;
         }
 
-        if ($this->split && $primary !== []) {
-            return [$this->makeSplitGroup($primary, $overflow)];
+        if ($this->split) {
+            return [$this->makeSplitGroup($primary[0], $overflow)];
         }
 
         if ($overflowActionCount === 1) {
@@ -420,21 +439,23 @@ final class ActionOverflow
             $group->hiddenLabel();
         }
 
+        if ($this->dropdownPlacement !== null && FilamentCompatibility::supportsDropdownPlacement($group)) {
+            $group->dropdownPlacement($this->dropdownPlacement);
+        }
+
         return $group;
     }
 
     /**
-     * The split button: the primary actions and the More menu side by side
-     * in Filament's button group, the menu's trigger joined to the main
-     * button by the package's stylesheet (`fi-ao-split-menu`).
+     * The split button: the main action and the menu side by side in
+     * Filament's button group, the menu's trigger joined to the main button
+     * by the package's stylesheet (`fi-ao-split-menu`).
      *
-     * @param  array<mixed>  $primary
      * @param  array<mixed>  $overflow
      */
-    private function makeSplitGroup(array $primary, array $overflow): ActionGroup
+    private function makeSplitGroup(mixed $main, array $overflow): ActionGroup
     {
         $more = $this->makeMoreGroup($overflow)->button();
-        $main = $this->morePosition === MorePosition::Start ? $primary[0] : $primary[array_key_last($primary)];
 
         $more->icon($this->hasExplicitIcon ? $this->icon : FilamentCompatibility::defaultSplitIcon())
             ->color($this->hasExplicitColor ? $this->color : $this->colorOf($main))
@@ -450,11 +471,11 @@ final class ActionOverflow
 
         // Inside a group Filament opens a dropdown to the side, as a submenu;
         // a split button's menu drops below, along its outer edge.
-        if (FilamentCompatibility::supportsDropdownPlacement($more)) {
+        if ($this->dropdownPlacement === null && FilamentCompatibility::supportsDropdownPlacement($more)) {
             $more->dropdownPlacement($this->morePosition === MorePosition::Start ? 'bottom-start' : 'bottom-end');
         }
 
-        return ActionGroup::make($this->placeOverflow($primary, $more))->buttonGroup();
+        return ActionGroup::make($this->placeOverflow([$main], $more))->buttonGroup();
     }
 
     /**

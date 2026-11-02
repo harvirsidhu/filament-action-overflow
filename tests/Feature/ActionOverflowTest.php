@@ -843,26 +843,76 @@ it('leaves hidden actions out of the split menu', function (): void {
     expect($parts[1]->getActions())->toBe([$actions[2], $actions[3]]);
 });
 
-it('falls back to the usual more group when split has no primary action', function (): void {
-    $actions = makeActions(['counterOne', 'counterTwo']);
+it('refuses a split button with other than one main action', function (int $count): void {
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
 
-    $composed = ActionOverflow::make($actions)
-        ->primaryCount(0)
+    ActionOverflow::make($actions)->primaryCount($count)->split()->toActions();
+})->with([0, 2])->throws(InvalidArgumentException::class, 'A split button has one main action.');
+
+it('refuses a split button with two main actions whatever the call order', function (): void {
+    ActionOverflow::make(makeActions(['callNext', 'counterOne', 'counterTwo']))
         ->split()
+        ->primaryCount(2)
         ->toActions();
+})->throws(InvalidArgumentException::class, 'A split button has one main action.');
 
-    expect($composed)->toHaveCount(1)
-        ->and($composed[0]->isButtonGroup())->toBeFalse()
-        ->and(getConfiguredValue($composed[0], ['icon'], 'getIcon'))->toBe('heroicon-m-ellipsis-vertical');
+it('makes the next available action the main one when the first is hidden', function (): void {
+    $actions = [
+        Action::make('callNext')->hidden(),
+        Action::make('counterOne'),
+        Action::make('counterTwo'),
+        Action::make('counterThree'),
+    ];
+
+    $parts = ActionOverflow::make($actions)->split()->toActions()[0]->getActions();
+
+    expect($parts[0])->toBe($actions[1])
+        ->and($parts[1]->getActions())->toBe([$actions[2], $actions[3]]);
 });
 
-it('reads split from config', function (): void {
-    config()->set('action-overflow.split', true);
+it('opens the more menu where dropdownPlacement says', function (): void {
+    /** @var ActionGroup $group */
+    $group = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))
+        ->dropdownPlacement('top-end')
+        ->toActions()[1];
 
-    $composed = ActionOverflow::make(makeActions(['callNext', 'counterOne', 'counterTwo']))->toActions();
+    expect($group->getDropdownPlacement())->toBe('top-end');
+});
+
+it('leaves the more menu to Filament\'s own placement when none is set', function (): void {
+    /** @var ActionGroup $group */
+    $group = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))->toActions()[1];
+
+    expect($group->getDropdownPlacement())->toBeNull();
+});
+
+it('opens the split menu where dropdownPlacement says', function (): void {
+    /** @var ActionGroup $menu */
+    $menu = ActionOverflow::make(makeActions(['callNext', 'counterOne', 'counterTwo']))
+        ->split()
+        ->dropdownPlacement('bottom-start')
+        ->toActions()[0]
+        ->getActions()[1];
+
+    expect($menu->getDropdownPlacement())->toBe('bottom-start');
+});
+
+it('exposes a withSplit macro on ActionGroup that matches split composition', function (): void {
+    $callNext = Action::make('callNext');
+    $counterOne = Action::make('counterOne');
+    $counterTwo = Action::make('counterTwo');
+
+    /** @var array<int, mixed> $composed */
+    $composed = ActionGroup::make([$callNext, $counterOne, $counterTwo])->withSplit();
 
     expect($composed)->toHaveCount(1)
         ->and($composed[0]->isButtonGroup())->toBeTrue();
+
+    $parts = $composed[0]->getActions();
+
+    expect($parts[0]->getName())->toBe('callNext')
+        ->and(array_map(static fn (Action $action): string => $action->getName(), $parts[1]->getActions()))
+        ->toBe(['counterOne', 'counterTwo']);
 });
 
 it('registers the split button stylesheet', function (): void {

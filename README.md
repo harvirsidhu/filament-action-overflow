@@ -30,11 +30,13 @@ Works **anywhere Filament accepts an action array** — page headers, table acti
 - [Quick start (30 seconds)](#quick-start-30-seconds)
 - [The two ways to use it](#the-two-ways-to-use-it)
 - [How it decides what overflows](#how-it-decides-what-overflows) — the mental model
+- [More or split?](#more-or-split)
 - [Recipes](#recipes)
   - [Choose how many primary actions](#choose-how-many-primary-actions)
   - [Style the More trigger](#style-the-more-trigger)
   - [Put More on the left](#put-more-on-the-left-and-rtl) (and RTL)
   - [A split button](#a-split-button)
+  - [Which way the menu opens](#which-way-the-menu-opens)
   - [Sections inside the menu (dividers)](#sections-inside-the-menu-dividers)
   - [Hidden, invisible & unauthorized actions](#hidden-invisible--unauthorized-actions)
   - [Button vs. link appearance](#button-vs-link-appearance)
@@ -174,6 +176,29 @@ That's the entire model. Everything below is just configuring these steps.
 
 ---
 
+## More or split?
+
+Two patterns from the same builder, for two different jobs:
+
+| | **More** (default) | **Split** (`split()`) |
+| --- | --- | --- |
+| For | Too many actions: the extras are other things you can do. | One action and its variants: the same action done differently. |
+| Looks like | `[ Edit ] [ ⋮ More ▾ ]` | `[ Call next │ ▾ ]` |
+| The menu's button | Grey, standing apart, labelled **More**. | A chevron in the main button's colour, joined to it. |
+| Main buttons | `primaryCount()` of them, any number. | Exactly one. |
+
+**Rule of thumb:** if every item in the menu reads as *"the main button, but…"* (where it sends, how it prints, what it saves as), use split. If they are just more things to do, use More. Other buttons stand beside a split button, not inside it.
+
+```php
+// More: tuck the extras away
+ActionGroup::make([$edit, $archive, $delete])->withOverflow();
+
+// Split: one action and its variants
+ActionGroup::make([$callNext, $toCounterOne, $toCounterTwo])->withSplit();
+```
+
+---
+
 ## Recipes
 
 ### Choose how many primary actions
@@ -251,10 +276,36 @@ In split mode:
 
 - The menu's trigger is an icon-only chevron in the main button's colour. `icon()` and `color()` still win when you set them, and the label becomes its tooltip.
 - A single leftover action stays in the menu: a split button with one choice is still a split button. With nothing left over there is only the main button.
+- It has **one main action**. `toActions()` throws an `InvalidArgumentException` for any `primaryCount()` other than `1`: with two main buttons nobody can tell which one the menu belongs to. Put other buttons beside it.
+- If the main action is hidden, the next available one becomes the main, because list order is priority order.
 - `morePosition(MorePosition::Start)` puts the menu on the leading side.
-- With `primaryCount(0)` there is no main button to join, so you get the usual **More** menu.
+- The menu opens below the button along its outer edge; [`dropdownPlacement()`](#which-way-the-menu-opens) changes that.
+
+`ActionGroup::make([...])->withSplit()` is the one-line form, like `withOverflow()`.
 
 The join is drawn by a small stylesheet the package registers with Filament (`resources/dist/filament-action-overflow.css`). It is published with your other Filament assets by `php artisan filament:assets`, which `php artisan filament:upgrade` runs.
+
+### Which way the menu opens
+
+Where the **More** control sits (`morePosition()`) and which way its menu opens are two separate settings. The menu's direction is Filament's own `dropdownPlacement()`, passed to the menu as is:
+
+```php
+ActionOverflow::make($actions)
+    ->dropdownPlacement('bottom-start')
+    ->toActions();
+```
+
+```text
+bottom-end (header default)        bottom-start
+      [ ⋮ More ▾ ]                 [ ⋮ More ▾ ]
+ ┌──────────────┐                  ┌──────────────┐
+ │ Archive      │                  │ Archive      │
+ └──────────────┘                  └──────────────┘
+```
+
+- `bottom-end` lines the menu's end edge up with the button's and opens toward the start; `bottom-start` is its mirror; `top-start` / `top-end` open upward. These are Floating UI's placements, so `start` and `end` follow the reading direction.
+- Filament flips the menu by itself when there is no room on that side (`dropdownFlip()`, on by default).
+- Left unset, the **More** menu keeps Filament's default for where it sits: `bottom-end` in a page's header actions, `bottom-start` elsewhere. A split button's menu opens below the button along its outer edge: `bottom-end` with the ▾ at the end, `bottom-start` with it at the start. Inside a group Filament would otherwise open it to the side, as a submenu.
 
 ### Sections inside the menu (dividers)
 
@@ -356,6 +407,14 @@ ActionGroup::make(array $actions)->withOverflow(int $primary = 1): array
 
 Terminal. Composes the group's actions with the given primary count, using config defaults for everything else. Returns the finished action array.
 
+### `ActionGroup::withSplit()` macro
+
+```php
+ActionGroup::make(array $actions)->withSplit(): array
+```
+
+Terminal. The [split button](#a-split-button) in one line: the group's first available action is the button, the rest are its menu. The same as `ActionOverflow::make($actions)->split()->toActions()`.
+
 ### `ActionOverflow` fluent API
 
 Every method returns `$this` for chaining; `toActions()` ends the chain and returns the array.
@@ -372,7 +431,8 @@ Every method returns `$this` for chaining; `toActions()` ends the chain and retu
 | `button(bool $state = true)` | `true` | Promote primary actions + trigger to button view. `false` opts out. |
 | `morePosition(MorePosition\|string $position)` | `End` | Place the **More** control at the `Start` or `End` of the row. |
 | `filterUnauthorized(bool $state = true)` | `false` | Drop unauthorized actions before composing. |
-| `split(bool $state = true)` | `false` | Join the primary actions and the menu into one control: a [split button](#a-split-button). |
+| `split(bool $state = true)` | `false` | Join the main action and its menu into one control: a [split button](#a-split-button). Exactly one main action. |
+| `dropdownPlacement(?string $placement)` | Filament's | Which way the menu opens: `'bottom-start'`, `'bottom-end'`, `'top-end'`… See [Which way the menu opens](#which-way-the-menu-opens). |
 | `toActions()` | — | **Terminal.** Returns `array<Action\|ActionGroup>`. |
 
 ### `MorePosition` enum
@@ -397,7 +457,6 @@ Every method returns `$this` for chaining; `toActions()` ends the chain and retu
 | `button` | `bool` | `true` | `button()` |
 | `more_position` | `string\|enum` | `'end'` | `morePosition()` |
 | `filter_unauthorized` | `bool` | `false` | `filterUnauthorized()` |
-| `split` | `bool` | `false` | `split()` |
 
 > Defaults are stored as **strings** (not Filament enum constants) so the published file loads cleanly on both Filament 4 and 5. You may still pass enums at the call site.
 
@@ -411,7 +470,7 @@ For the curious, `toActions()` runs a fixed five-stage pipeline:
 2. **Partition** — walk left-to-right, taking `primaryCount` *real* actions into primary; a divider contributes its children toward that count and re-wraps any leftovers as a divider in overflow.
 3. **Promote** — if `button` is on, call `->button()` on the primary actions.
 4. **Sanitize** — unwrap a *leading* divider in the overflow so there's no orphan separator at the top of the menu.
-5. **Assemble** — count the available overflow actions and apply the [0 / 1 / 2+ rule](#how-it-decides-what-overflows), then place the result at the start or end per `morePosition`. In split mode, wrap the primary actions and the menu in one Filament button group instead.
+5. **Assemble** — count the available overflow actions and apply the [0 / 1 / 2+ rule](#how-it-decides-what-overflows), then place the result at the start or end per `morePosition`. In split mode, wrap the main action and the menu in one Filament button group instead.
 
 The package never renders HTML — it only restructures the action array and hands it back to Filament, which means it composes naturally with everything Filament already does (theming, RTL, authorization display, etc.). Its one stylesheet only joins the split button's two halves.
 
