@@ -12,4 +12,5 @@ return [
     'icon_position' => 'after',
     'filter_unauthorized' => false,
     'more_position' => 'end',
+    'split' => false,
 ];

@@ -3,6 +3,7 @@
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Support\Enums\IconPosition;
+use Filament\Support\Facades\FilamentAsset;
 use Filament\Support\Icons\Heroicon;
 use Harvirsidhu\FilamentActionOverflow\ActionOverflow;
 use Harvirsidhu\FilamentActionOverflow\Enums\MorePosition;
@@ -719,6 +720,160 @@ it('withOverflow macro supports dividers from nested dropdown(false) groups', fu
  * @param  array<string>  $names
  * @return array<Action>
  */
+it('joins the primary action and the menu into one button group when split', function (): void {
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    $composed = ActionOverflow::make($actions)->split()->toActions();
+
+    expect($composed)->toHaveCount(1)
+        ->and($composed[0])->toBeInstanceOf(ActionGroup::class)
+        ->and($composed[0]->isButtonGroup())->toBeTrue();
+
+    $parts = $composed[0]->getActions();
+
+    expect($parts)->toHaveCount(2)
+        ->and($parts[0])->toBe($actions[0])
+        ->and($parts[1])->toBeInstanceOf(ActionGroup::class)
+        ->and($parts[1]->getActions())->toBe([$actions[1], $actions[2]]);
+});
+
+it('keeps a single leftover action in the split menu', function (): void {
+    $actions = makeActions(['callNext', 'counterOne']);
+
+    $parts = ActionOverflow::make($actions)->split()->toActions()[0]->getActions();
+
+    expect($parts[1])->toBeInstanceOf(ActionGroup::class)
+        ->and($parts[1]->getActions())->toBe([$actions[1]]);
+});
+
+it('shows only the main button when split has nothing to put in the menu', function (): void {
+    $actions = makeActions(['callNext']);
+
+    $composed = ActionOverflow::make($actions)->split()->toActions();
+
+    expect($composed)->toBe($actions);
+});
+
+it('draws the split menu as an icon-only chevron in the main button colour', function (): void {
+    $actions = [Action::make('callNext')->color('success'), ...makeActions(['counterOne', 'counterTwo'])];
+
+    /** @var ActionGroup $menu */
+    $menu = ActionOverflow::make($actions)->split()->toActions()[0]->getActions()[1];
+
+    expect(getConfiguredValue($menu, ['icon'], 'getIcon'))->toBe('heroicon-m-chevron-down')
+        ->and(getConfiguredValue($menu, ['color'], 'getColor'))->toBe('success')
+        ->and(getConfiguredValue($menu, ['tooltip'], 'getTooltip'))->toBe('More')
+        ->and(getConfiguredValue($menu, ['isLabelHidden'], 'isLabelHidden'))->toBeTrue()
+        ->and($menu->isButton())->toBeTrue();
+});
+
+it('colours the split menu primary when the main button has no colour of its own', function (): void {
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    /** @var ActionGroup $menu */
+    $menu = ActionOverflow::make($actions)->split()->toActions()[0]->getActions()[1];
+
+    expect(getConfiguredValue($menu, ['color'], 'getColor'))->toBe('primary');
+});
+
+it('keeps an explicit icon and colour on the split menu', function (): void {
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    /** @var ActionGroup $menu */
+    $menu = ActionOverflow::make($actions)
+        ->split()
+        ->icon('heroicon-m-bars-3')
+        ->color('gray')
+        ->toActions()[0]
+        ->getActions()[1];
+
+    expect(getConfiguredValue($menu, ['icon'], 'getIcon'))->toBe('heroicon-m-bars-3')
+        ->and(getConfiguredValue($menu, ['color'], 'getColor'))->toBe('gray');
+});
+
+it('puts the split menu first when morePosition is start', function (): void {
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    $parts = ActionOverflow::make($actions)
+        ->split()
+        ->morePosition(MorePosition::Start)
+        ->toActions()[0]
+        ->getActions();
+
+    expect($parts[0])->toBeInstanceOf(ActionGroup::class)
+        ->and($parts[1])->toBe($actions[0]);
+});
+
+it('drops the split menu below the button, along its outer edge', function (): void {
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    /** @var ActionGroup $end */
+    $end = ActionOverflow::make($actions)->split()->toActions()[0]->getActions()[1];
+    /** @var ActionGroup $start */
+    $start = ActionOverflow::make(makeActions(['callNext', 'counterOne', 'counterTwo']))
+        ->split()
+        ->morePosition(MorePosition::Start)
+        ->toActions()[0]
+        ->getActions()[0];
+
+    expect($end->getDropdownPlacement())->toBe('bottom-end')
+        ->and($start->getDropdownPlacement())->toBe('bottom-start');
+});
+
+it('marks the split menu for the split button stylesheet', function (): void {
+    $actions = makeActions(['callNext', 'counterOne', 'counterTwo']);
+
+    /** @var ActionGroup $menu */
+    $menu = ActionOverflow::make($actions)->split()->toActions()[0]->getActions()[1];
+
+    expect(getConfiguredValue($menu, ['extraDropdownAttributes'], 'getExtraDropdownAttributes'))
+        ->toHaveKey('class', 'fi-ao-split-menu');
+});
+
+it('leaves hidden actions out of the split menu', function (): void {
+    $actions = [
+        Action::make('callNext'),
+        Action::make('counterOne')->hidden(),
+        Action::make('counterTwo'),
+        Action::make('counterThree'),
+    ];
+
+    $parts = ActionOverflow::make($actions)->split()->toActions()[0]->getActions();
+
+    expect($parts[1]->getActions())->toBe([$actions[2], $actions[3]]);
+});
+
+it('falls back to the usual more group when split has no primary action', function (): void {
+    $actions = makeActions(['counterOne', 'counterTwo']);
+
+    $composed = ActionOverflow::make($actions)
+        ->primaryCount(0)
+        ->split()
+        ->toActions();
+
+    expect($composed)->toHaveCount(1)
+        ->and($composed[0]->isButtonGroup())->toBeFalse()
+        ->and(getConfiguredValue($composed[0], ['icon'], 'getIcon'))->toBe('heroicon-m-ellipsis-vertical');
+});
+
+it('reads split from config', function (): void {
+    config()->set('action-overflow.split', true);
+
+    $composed = ActionOverflow::make(makeActions(['callNext', 'counterOne', 'counterTwo']))->toActions();
+
+    expect($composed)->toHaveCount(1)
+        ->and($composed[0]->isButtonGroup())->toBeTrue();
+});
+
+it('registers the split button stylesheet', function (): void {
+    $ids = array_map(
+        static fn (object $asset): string => $asset->getId(),
+        FilamentAsset::getStyles(['harvirsidhu/filament-action-overflow']),
+    );
+
+    expect($ids)->toContain('filament-action-overflow');
+});
+
 function makeActions(array $names): array
 {
     return array_map(static fn (string $name): Action => Action::make($name), $names);

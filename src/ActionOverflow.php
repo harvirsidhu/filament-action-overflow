@@ -30,6 +30,9 @@ final class ActionOverflow
         private IconPosition $iconPosition = IconPosition::After,
         private bool $filterUnauthorized = false,
         private MorePosition $morePosition = MorePosition::End,
+        private bool $split = false,
+        private bool $hasExplicitIcon = false,
+        private bool $hasExplicitColor = false,
     ) {
         $this->icon ??= $this->resolveDefaultMoreIcon();
     }
@@ -50,6 +53,7 @@ final class ActionOverflow
             iconPosition: self::normalizeIconPosition(config('action-overflow.icon_position', IconPosition::After)),
             filterUnauthorized: (bool) config('action-overflow.filter_unauthorized', false),
             morePosition: self::normalizeMorePosition(config('action-overflow.more_position', MorePosition::End)),
+            split: (bool) config('action-overflow.split', false),
         );
     }
 
@@ -74,6 +78,7 @@ final class ActionOverflow
     public function icon(string | BackedEnum | null $icon = null): self
     {
         $this->icon = self::normalizeIcon($icon) ?? $this->resolveDefaultMoreIcon();
+        $this->hasExplicitIcon = $icon !== null;
 
         return $this;
     }
@@ -88,6 +93,7 @@ final class ActionOverflow
     public function color(string $color = 'gray'): self
     {
         $this->color = $color;
+        $this->hasExplicitColor = true;
 
         return $this;
     }
@@ -116,6 +122,20 @@ final class ActionOverflow
     public function morePosition(MorePosition | string $position = MorePosition::End): self
     {
         $this->morePosition = self::normalizeMorePosition($position);
+
+        return $this;
+    }
+
+    /**
+     * Joins the primary actions and the More menu into one control: a split
+     * button. The menu's trigger becomes an icon-only chevron in the main
+     * button's colour (unless `icon()` or `color()` say otherwise), and a
+     * single leftover action stays in the menu instead of becoming a second
+     * button. With nothing left over there is only the main button.
+     */
+    public function split(bool $state = true): self
+    {
+        $this->split = $state;
 
         return $this;
     }
@@ -151,6 +171,10 @@ final class ActionOverflow
 
         if ($overflowActionCount === 0) {
             return $primary;
+        }
+
+        if ($this->split && $primary !== []) {
+            return [$this->makeSplitGroup($primary, $overflow)];
         }
 
         if ($overflowActionCount === 1) {
@@ -397,6 +421,51 @@ final class ActionOverflow
         }
 
         return $group;
+    }
+
+    /**
+     * The split button: the primary actions and the More menu side by side
+     * in Filament's button group, the menu's trigger joined to the main
+     * button by the package's stylesheet (`fi-ao-split-menu`).
+     *
+     * @param  array<mixed>  $primary
+     * @param  array<mixed>  $overflow
+     */
+    private function makeSplitGroup(array $primary, array $overflow): ActionGroup
+    {
+        $more = $this->makeMoreGroup($overflow)->button();
+        $main = $this->morePosition === MorePosition::Start ? $primary[0] : $primary[array_key_last($primary)];
+
+        $more->icon($this->hasExplicitIcon ? $this->icon : FilamentCompatibility::defaultSplitIcon())
+            ->color($this->hasExplicitColor ? $this->color : $this->colorOf($main))
+            ->tooltip($this->label);
+
+        if (FilamentCompatibility::supportsHiddenLabel($more)) {
+            $more->hiddenLabel();
+        }
+
+        if (FilamentCompatibility::supportsExtraDropdownAttributes($more)) {
+            $more->extraDropdownAttributes(['class' => 'fi-ao-split-menu'], merge: true);
+        }
+
+        // Inside a group Filament opens a dropdown to the side, as a submenu;
+        // a split button's menu drops below, along its outer edge.
+        if (FilamentCompatibility::supportsDropdownPlacement($more)) {
+            $more->dropdownPlacement($this->morePosition === MorePosition::Start ? 'bottom-start' : 'bottom-end');
+        }
+
+        return ActionGroup::make($this->placeOverflow($primary, $more))->buttonGroup();
+    }
+
+    /**
+     * The colour the main button is drawn in: its own, or Filament's
+     * default for a button, primary.
+     */
+    private function colorOf(mixed $action): string
+    {
+        $color = is_object($action) && method_exists($action, 'getColor') ? $action->getColor() : null;
+
+        return is_string($color) ? $color : 'primary';
     }
 
     private function resolveDefaultMoreIcon(): string

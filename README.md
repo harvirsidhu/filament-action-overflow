@@ -34,6 +34,7 @@ Works **anywhere Filament accepts an action array** — page headers, table acti
   - [Choose how many primary actions](#choose-how-many-primary-actions)
   - [Style the More trigger](#style-the-more-trigger)
   - [Put More on the left](#put-more-on-the-left-and-rtl) (and RTL)
+  - [A split button](#a-split-button)
   - [Sections inside the menu (dividers)](#sections-inside-the-menu-dividers)
   - [Hidden, invisible & unauthorized actions](#hidden-invisible--unauthorized-actions)
   - [Button vs. link appearance](#button-vs-link-appearance)
@@ -52,6 +53,7 @@ Works **anywhere Filament accepts an action array** — page headers, table acti
 - **Section-aware.** Filament's `->dropdown(false)` divider groups flow into the menu as real, separated sections.
 - **Visibility-aware.** `->hidden()`, `->visible(false)`, and (opt-in) `->authorize(...)` are all honored *before* anything is composed, so hidden actions never leak into **More**.
 - **Direction-aware.** Position **More** at the start or end; under RTL it flips correctly with zero extra config.
+- **Split button.** `->split()` joins the main action and its menu into one control.
 - **Filament 4 & 5.** A single compatibility layer keeps one codebase working across both.
 
 ---
@@ -225,6 +227,35 @@ ActionOverflow::make($actions)
 
 The position applies to the flattened single-action case too, not just the grouped **More** trigger.
 
+### A split button
+
+When the leftover actions are variations of the main one (where it sends, how it prints, what it saves as), `split()` joins the main action and the menu into one control:
+
+```php
+ActionOverflow::make([
+    Action::make('callNext'),
+    Action::make('counterOne')->label('Counter 1'),
+    Action::make('counterTwo')->label('Counter 2'),
+])
+    ->split()
+    ->toActions();
+```
+
+```text
+[ Call next │ ▾ ]
+              ├─ Counter 1
+              └─ Counter 2
+```
+
+In split mode:
+
+- The menu's trigger is an icon-only chevron in the main button's colour. `icon()` and `color()` still win when you set them, and the label becomes its tooltip.
+- A single leftover action stays in the menu: a split button with one choice is still a split button. With nothing left over there is only the main button.
+- `morePosition(MorePosition::Start)` puts the menu on the leading side.
+- With `primaryCount(0)` there is no main button to join, so you get the usual **More** menu.
+
+The join is drawn by a small stylesheet the package registers with Filament (`resources/dist/filament-action-overflow.css`). It is published with your other Filament assets by `php artisan filament:assets`, which `php artisan filament:upgrade` runs.
+
 ### Sections inside the menu (dividers)
 
 A `dropdown(false)` group nested inside an `ActionGroup` is Filament's idiom for *"render these as a separated section."* This package treats those as first-class and carries them into the **More** menu:
@@ -341,6 +372,7 @@ Every method returns `$this` for chaining; `toActions()` ends the chain and retu
 | `button(bool $state = true)` | `true` | Promote primary actions + trigger to button view. `false` opts out. |
 | `morePosition(MorePosition\|string $position)` | `End` | Place the **More** control at the `Start` or `End` of the row. |
 | `filterUnauthorized(bool $state = true)` | `false` | Drop unauthorized actions before composing. |
+| `split(bool $state = true)` | `false` | Join the primary actions and the menu into one control: a [split button](#a-split-button). |
 | `toActions()` | — | **Terminal.** Returns `array<Action\|ActionGroup>`. |
 
 ### `MorePosition` enum
@@ -365,6 +397,7 @@ Every method returns `$this` for chaining; `toActions()` ends the chain and retu
 | `button` | `bool` | `true` | `button()` |
 | `more_position` | `string\|enum` | `'end'` | `morePosition()` |
 | `filter_unauthorized` | `bool` | `false` | `filterUnauthorized()` |
+| `split` | `bool` | `false` | `split()` |
 
 > Defaults are stored as **strings** (not Filament enum constants) so the published file loads cleanly on both Filament 4 and 5. You may still pass enums at the call site.
 
@@ -378,16 +411,16 @@ For the curious, `toActions()` runs a fixed five-stage pipeline:
 2. **Partition** — walk left-to-right, taking `primaryCount` *real* actions into primary; a divider contributes its children toward that count and re-wraps any leftovers as a divider in overflow.
 3. **Promote** — if `button` is on, call `->button()` on the primary actions.
 4. **Sanitize** — unwrap a *leading* divider in the overflow so there's no orphan separator at the top of the menu.
-5. **Assemble** — count the available overflow actions and apply the [0 / 1 / 2+ rule](#how-it-decides-what-overflows), then place the result at the start or end per `morePosition`.
+5. **Assemble** — count the available overflow actions and apply the [0 / 1 / 2+ rule](#how-it-decides-what-overflows), then place the result at the start or end per `morePosition`. In split mode, wrap the primary actions and the menu in one Filament button group instead.
 
-The package never renders HTML — it only restructures the action array and hands it back to Filament, which means it composes naturally with everything Filament already does (theming, RTL, authorization display, etc.).
+The package never renders HTML — it only restructures the action array and hands it back to Filament, which means it composes naturally with everything Filament already does (theming, RTL, authorization display, etc.). Its one stylesheet only joins the split button's two halves.
 
 ---
 
 ## FAQ
 
 **Why didn't a "More" button appear?**
-You have one or zero overflow actions. A single leftover is shown inline by design; **More** appears only with two or more.
+You have one or zero overflow actions. A single leftover is shown inline by design; **More** appears only with two or more. (In split mode a single leftover stays in the menu.)
 
 **Why is one of my overflow actions a plain button instead of being in the dropdown?**
 Same rule — when exactly one action overflows, it's surfaced inline rather than hidden behind a dropdown for a single item.
@@ -400,6 +433,19 @@ Yes — the output is just an action array, valid anywhere Filament accepts one 
 
 **An action's visibility depends on the record — is that respected?**
 Yes. Filtering calls the same `isHidden()` / `isVisible()` / `isAuthorized()` your action defines, so record-aware closures are honored.
+
+**My actions' visibility changes within one request (a list page's tabs, say). What happens?**
+Visibility is read once, when `toActions()` composes the list. Filament builds a page's header actions once a request, before an update such as a tab switch lands, so compose them again after it. On a list page with tabs, for example:
+
+```php
+public function updatedActiveTab(): void
+{
+    parent::updatedActiveTab();
+
+    $this->cachedHeaderActions = [];
+    $this->cacheInteractsWithHeaderActions();
+}
+```
 
 ---
 

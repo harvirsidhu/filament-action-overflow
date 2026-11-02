@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Harvirsidhu\FilamentActionOverflow;
 
 use Filament\Actions\ActionGroup;
+use Filament\Support\Assets\Css;
+use Filament\Support\Facades\FilamentAsset;
 use Spatie\LaravelPackageTools\Commands\InstallCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
@@ -35,6 +37,23 @@ class FilamentActionOverflowServiceProvider extends PackageServiceProvider
     public function packageBooted(): void
     {
         $this->registerActionGroupMacro();
+        $this->registerAssets();
+    }
+
+    /**
+     * The split button's stylesheet (`ActionOverflow::split()`), published
+     * with the app's other Filament assets by `php artisan filament:assets`
+     * (which `filament:upgrade` runs).
+     */
+    protected function registerAssets(): void
+    {
+        if (! class_exists(FilamentAsset::class)) {
+            return;
+        }
+
+        FilamentAsset::register([
+            Css::make('filament-action-overflow', __DIR__ . '/../resources/dist/filament-action-overflow.css'),
+        ], package: 'harvirsidhu/filament-action-overflow');
     }
 
     protected function registerActionGroupMacro(): void
