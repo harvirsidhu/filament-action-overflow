@@ -17,6 +17,12 @@ use Throwable;
 
 final class ActionOverflow
 {
+    /** The More label in English, and what older published config files carry. */
+    private const DEFAULT_LABEL = 'More';
+
+    /** The More label in the app's language (resources/lang). */
+    private const DEFAULT_LABEL_KEY = 'filament-action-overflow::action-overflow.more';
+
     private bool $hasExplicitPrimaryCount = false;
 
     private bool $hasExplicitIcon = false;
@@ -31,7 +37,7 @@ final class ActionOverflow
     public function __construct(
         private readonly array $actions,
         private int $primaryCount = 1,
-        private string $label = 'More',
+        private ?string $label = null,
         private ?string $icon = null,
         private string $color = 'gray',
         private bool $hiddenLabel = false,
@@ -53,7 +59,7 @@ final class ActionOverflow
         return new self(
             actions: $actions,
             primaryCount: (int) config('action-overflow.primary_count', 1),
-            label: (string) config('action-overflow.label', 'More'),
+            label: self::normalizeLabel(config('action-overflow.label')),
             icon: self::normalizeIcon(config('action-overflow.icon')),
             color: (string) config('action-overflow.color', 'gray'),
             hiddenLabel: (bool) config('action-overflow.hidden_label', false),
@@ -76,7 +82,12 @@ final class ActionOverflow
         return $this;
     }
 
-    public function label(string $label = 'More'): self
+    /**
+     * The More trigger's label (a split menu's tooltip and screen-reader
+     * name), used as given: wrap it in `__()` to translate it. `null` goes
+     * back to the default, "More" in the app's language.
+     */
+    public function label(?string $label = null): self
     {
         $this->label = $label;
 
@@ -478,7 +489,7 @@ final class ActionOverflow
     private function makeMoreGroup(array $overflow): ActionGroup
     {
         $group = ActionGroup::make($overflow)
-            ->label($this->label)
+            ->label($this->resolveLabel())
             ->color($this->color);
 
         if ($this->button) {
@@ -514,7 +525,7 @@ final class ActionOverflow
 
         $more->icon($this->hasExplicitIcon ? $this->icon : FilamentCompatibility::defaultSplitIcon())
             ->color($this->hasExplicitColor ? $this->color : $this->colorOf($main))
-            ->tooltip($this->label);
+            ->tooltip($this->resolveLabel());
 
         if (FilamentCompatibility::supportsHiddenLabel($more)) {
             $more->hiddenLabel();
@@ -551,6 +562,46 @@ final class ActionOverflow
     private function resolveDefaultMoreIcon(): string
     {
         return FilamentCompatibility::defaultMoreIcon();
+    }
+
+    /**
+     * The More label: the one given, or "More" in the app's language, read
+     * as the list is composed.
+     */
+    private function resolveLabel(): string
+    {
+        if ($this->label !== null) {
+            return $this->label;
+        }
+
+        $label = self::stringOr(__(self::DEFAULT_LABEL_KEY), self::DEFAULT_LABEL);
+
+        // Without the package's translations loaded, the translator answers the key.
+        return $label === self::DEFAULT_LABEL_KEY ? self::DEFAULT_LABEL : $label;
+    }
+
+    /**
+     * The config's label. Unset, or the English default that older published
+     * config files carry, it is the translated default (`null`). Any other
+     * string goes through the translator, from the app's own lang files: a
+     * config file can't call `__()` itself.
+     */
+    private static function normalizeLabel(mixed $label): ?string
+    {
+        if ((! is_string($label)) || ($label === '') || ($label === self::DEFAULT_LABEL)) {
+            return null;
+        }
+
+        return self::stringOr(__($label), $label);
+    }
+
+    /**
+     * The translator's answer when it is a line: for a key that names a whole
+     * lang file it answers an array.
+     */
+    private static function stringOr(mixed $line, string $fallback): string
+    {
+        return is_string($line) ? $line : $fallback;
     }
 
     private static function normalizeIcon(mixed $icon): ?string

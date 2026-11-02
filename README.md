@@ -34,6 +34,7 @@ Works **anywhere Filament accepts an action array** — page headers, table acti
 - [Recipes](#recipes)
   - [Choose how many primary actions](#choose-how-many-primary-actions)
   - [Style the More trigger](#style-the-more-trigger)
+  - [Translate the More label](#translate-the-more-label)
   - [Put More on the left](#put-more-on-the-left-and-rtl) (and RTL)
   - [A split button](#a-split-button)
   - [Which way the menu opens](#which-way-the-menu-opens)
@@ -56,6 +57,7 @@ Works **anywhere Filament accepts an action array** — page headers, table acti
 - **Section-aware.** Filament's `->dropdown(false)` divider groups flow into the menu as real, separated sections.
 - **Visibility-aware.** `->hidden()`, `->visible(false)`, and (opt-in) `->authorize(...)` are all honored *before* anything is composed, so hidden actions never leak into **More**.
 - **Direction-aware.** Position **More** at the start or end; under RTL it flips correctly with zero extra config.
+- **Translated.** **More** is shown in the app's language, with 49 languages included.
 - **Split button.** `->split()` joins the main action and its menu into one control.
 - **Filament 4 & 5.** A single compatibility layer keeps one codebase working across both.
 
@@ -225,7 +227,7 @@ use Filament\Support\Enums\IconPosition;
 use Filament\Support\Icons\Heroicon;
 
 ActionOverflow::make($actions)
-    ->label('Manage')                          // trigger text
+    ->label(__('Manage'))                      // trigger text, used as given
     ->icon(Heroicon::EllipsisVertical)         // string | BackedEnum | Filament icon enum
     ->iconPosition(IconPosition::Before)       // 'before' | 'after' | IconPosition enum
     ->color('danger')                          // any Filament color name
@@ -235,6 +237,20 @@ ActionOverflow::make($actions)
 
 - **`icon()`** accepts a plain string (`'heroicon-m-bars-3'`), a backed enum, or a Filament icon enum like `Heroicon::EllipsisVertical`.
 - **`hiddenLabel()`** draws an icon-only trigger. The label stays as its name for screen readers, so keep it meaningful.
+
+### Translate the More label
+
+**More** is shown in the app's language. The package includes it in 49 languages, under the locale codes Filament uses (`ms`, `zh_CN`, `pt_BR`…). To change a word, or add a language, publish the translations and edit them:
+
+```bash
+php artisan vendor:publish --tag="filament-action-overflow-translations"
+```
+
+They land in `lang/vendor/filament-action-overflow/{locale}/action-overflow.php`, each as `'more' => '…'`.
+
+- A label you give in code is used as given, like any Filament label, so translate it there: `->label(__('Manage'))`. `label()` with nothing goes back to the translated **More**.
+- A label set in the config is translated when the list is composed, from your own lang files (`lang/ms.json`: `{"Manage": "Urus"}`), because a config file can't call `__()` itself.
+- A split button's menu uses the same label as its tooltip and screen-reader name, so it is translated too.
 
 ### Put More on the left (and RTL)
 
@@ -279,7 +295,7 @@ ActionOverflow::make([
 In split mode:
 
 - The menu's trigger is an icon-only chevron in the main button's colour. `icon()` and `color()` still win when you set them on the builder; the config's `icon` and `color` style the **More** button only.
-- `label()` names the menu: it is the chevron's tooltip and what a screen reader announces, so say what the choices are (`->label('Calling to')`) rather than leaving it at **More**.
+- `label()` names the menu: it is the chevron's tooltip and what a screen reader announces, so say what the choices are (`->label(__('Calling to'))`) rather than leaving it at **More**.
 - A single leftover action stays in the menu: a split button with one choice is still a split button. With nothing left over there is only the main button.
 - It has **one main action**, whatever `primary_count` the config sets. `toActions()` throws an `InvalidArgumentException` if you ask for any other `primaryCount()`: with two main buttons nobody can tell which one the menu belongs to. Put other buttons beside it.
 - If the main action is hidden, the next available one becomes the main, because list order is priority order.
@@ -457,7 +473,7 @@ Every method returns `$this` for chaining; `toActions()` ends the chain and retu
 | ------ | ------- | ----------- |
 | `make(array $actions)` | — | Start a builder from a flat action list. |
 | `primaryCount(int $count)` | `1` | How many actions stay out front. `0` overflows everything; negatives throw. |
-| `label(string $label)` | `'More'` | The **More** trigger's text. |
+| `label(?string $label = null)` | **More**, translated | The **More** trigger's text, used as given. `null` goes back to the translated default. See [Translate the More label](#translate-the-more-label). |
 | `icon(string\|BackedEnum\|null $icon)` | ellipsis | Trigger icon. String, backed enum, or Filament icon enum; `null` restores the default. |
 | `iconPosition(IconPosition\|string\|BackedEnum\|null $position)` | `After` | `'before'` / `'after'` or an `IconPosition` enum. |
 | `color(string $color)` | `'gray'` | Any Filament color name for the trigger. |
@@ -484,7 +500,7 @@ Every method returns `$this` for chaining; `toActions()` ends the chain and retu
 | Key | Type | Default | Maps to |
 | --- | ---- | ------- | ------- |
 | `primary_count` | `int` | `1` | `primaryCount()` |
-| `label` | `string` | `'More'` | `label()` |
+| `label` | `string\|null` | `null` (**More**, translated) | `label()`, translated |
 | `icon` | `string\|enum` | `'heroicon-m-ellipsis-vertical'` | `icon()` |
 | `icon_position` | `string\|enum` | `'after'` | `iconPosition()` |
 | `color` | `string` | `'gray'` | `color()` |
@@ -494,6 +510,8 @@ Every method returns `$this` for chaining; `toActions()` ends the chain and retu
 | `filter_unauthorized` | `bool` | `false` | `filterUnauthorized()` |
 
 > Defaults are stored as **strings** (not Filament enum constants) so the published file loads cleanly on both Filament 4 and 5. You may still pass enums at the call site.
+>
+> A `label` of `'More'`, as older published config files have it, counts as the default, so it is translated too.
 
 ---
 

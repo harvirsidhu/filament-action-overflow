@@ -91,6 +91,75 @@ it('supports configurable more presentation options', function (): void {
         ->and(getConfiguredValue($group, ['color'], 'getColor'))->toBe('danger');
 });
 
+it('labels the more menu "More" in English', function (): void {
+    /** @var ActionGroup $group */
+    $group = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))->toActions()[1];
+
+    expect($group->getLabel())->toBe('More');
+});
+
+it('labels the more menu in the app\'s language', function (): void {
+    app()->setLocale('ms');
+
+    /** @var ActionGroup $group */
+    $group = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))->toActions()[1];
+    /** @var ActionGroup $menu */
+    $menu = ActionOverflow::make(makeActions(['callNext', 'counterOne']))->split()->toActions()[0]->getActions()[1];
+
+    expect($group->getLabel())->toBe('Lagi')
+        ->and($menu->getTooltip())->toBe('Lagi');
+});
+
+it('uses a label given in code as given, and label() goes back to the translated default', function (): void {
+    app()->setLocale('ms');
+    app('translator')->addLines(['*.Options' => 'Pilihan'], 'ms');
+
+    /** @var ActionGroup $given */
+    $given = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))->label('Options')->toActions()[1];
+    /** @var ActionGroup $reset */
+    $reset = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))->label('Options')->label()->toActions()[1];
+
+    expect($given->getLabel())->toBe('Options')
+        ->and($reset->getLabel())->toBe('Lagi');
+});
+
+it('translates a label set in the config from the app\'s own lang files', function (): void {
+    app()->setLocale('ms');
+    app('translator')->addLines(['*.Manage' => 'Urus'], 'ms');
+    config()->set('action-overflow.label', 'Manage');
+
+    /** @var ActionGroup $group */
+    $group = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))->toActions()[1];
+
+    expect($group->getLabel())->toBe('Urus');
+});
+
+it('treats "More" in an older published config as the translated default', function (): void {
+    app()->setLocale('ms');
+    config()->set('action-overflow.label', 'More');
+
+    /** @var ActionGroup $group */
+    $group = ActionOverflow::make(makeActions(['view', 'edit', 'archive']))->toActions()[1];
+
+    expect($group->getLabel())->toBe('Lagi');
+});
+
+it('has the more label in every language it ships', function (): void {
+    $files = glob(dirname(__DIR__, 2) . '/resources/lang/*/action-overflow.php') ?: [];
+
+    expect(count($files))->toBeGreaterThan(40);
+
+    foreach ($files as $file) {
+        $lines = require $file;
+
+        expect($lines)->toHaveKey('more')
+            ->and($lines['more'])->toBeString()->not->toBe('');
+    }
+
+    expect(trans('filament-action-overflow::action-overflow.more', [], 'en'))->toBe('More')
+        ->and(trans('filament-action-overflow::action-overflow.more', [], 'zh_CN'))->toBe('更多');
+});
+
 it('accepts a backed enum icon with moreIcon', function (): void {
     $actions = makeActions(['view', 'edit', 'archive']);
 

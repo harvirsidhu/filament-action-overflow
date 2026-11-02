@@ -10,6 +10,7 @@ All notable changes to `filament-action-overflow` will be documented in this fil
 - `ActionOverflow::dropdownPlacement()`, Filament's own placement (`'bottom-start'`, `'bottom-end'`, `'top-end'`…) for the menu, in both modes. Unset, the **More** menu keeps Filament's default for where it sits.
 - `ActionOverflow::livewire()` attaches every action, divider children included, to the page before their visibility is read, so a `visible()` / `hidden()` closure that reads `$livewire` or `$record` gets them. Filament attaches a page's header actions only after `getHeaderActions()` returns, so until now such a closure got `null`. The macros pass on a `livewire()` set on the group.
 - A small stylesheet, registered with Filament's asset manager, that joins the split button's two halves. It is published with the app's other Filament assets by `php artisan filament:assets`.
+- The **More** label is shown in the app's language, with 49 languages included (`resources/lang`; publish them with `--tag="filament-action-overflow-translations"` to change a word or add a language). The config's `label` is now `null`, meaning that default, and a string set there is translated from the app's own lang files. `'More'`, which older published config files carry, counts as the default. `label()` now takes `?string`: with nothing it goes back to the default. A label given in code is used as given.
 
 ### Fixed
 - `withOverflow()` called without a count uses the configured `primary_count`, as the README said, instead of always `1`.
