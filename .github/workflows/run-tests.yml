@@ -16,16 +16,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Composer picks the Filament version. PHP 8.2 gets Filament 4:
+        # pest-plugin-livewire 4 needs PHP 8.3, and 3 needs Livewire 3. PHP 8.3
+        # and 8.4 get Filament 5. Filament 4.0.x can't be installed at all: it
+        # has security advisories, which Composer refuses to install.
         php: ['8.2', '8.3', '8.4']
-        filament: ['^5.0']
-        include:
-          # Filament 4 too: the latest, and 4.0, which differs in places.
-          - php: '8.4'
-            filament: '^4.0'
-          - php: '8.2'
-            filament: '4.0.*'
 
-    name: PHP ${{ matrix.php }}${{ matrix.filament != '^5.0' && format(' · Filament {0}', matrix.filament) || '' }}
+    name: PHP ${{ matrix.php }}
 
     steps:
       - name: Checkout code
@@ -37,9 +34,6 @@ jobs:
           php-version: ${{ matrix.php }}
           extensions: dom, curl, libxml, mbstring, zip
           coverage: none
-
-      - name: Use Filament ${{ matrix.filament }}
-        run: composer require "filament/filament:${{ matrix.filament }}" --no-interaction --no-update
 
       - name: Install dependencies
         uses: ramsey/composer-install@65e4f84970763564f46a70b8a54b90d033b3bdda # 4.0.0
