@@ -2,7 +2,7 @@
 
 All notable changes to `filament-action-overflow` will be documented in this file.
 
-## Unreleased
+## 1.2.0 - 2026-11-02
 
 ### Added
 - `ActionOverflow::split()` joins the main action and its **More** menu into one control: a split button, for one action and its variants. It has exactly one main action, whatever `primary_count` the config sets (`toActions()` throws if `primaryCount()` asks for another). The menu's trigger becomes an icon-only chevron in the main button's colour (unless `icon()` or `color()` are set), a single leftover action stays in the menu, the menu opens below the button along its outer edge, and `morePosition(MorePosition::Start)` puts the menu first.
